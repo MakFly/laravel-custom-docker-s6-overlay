@@ -1,0 +1,56 @@
+#!/command/with-contenv bash
+
+# Palette de couleurs harmonisée
+COLOR_INFO='\033[1;36m'    # Cyan clair
+COLOR_SUCCESS='\033[1;32m' # Vert vif
+COLOR_WARN='\033[1;33m'    # Jaune
+COLOR_ERROR='\033[1;31m'   # Rouge vif
+COLOR_CMD='\033[1;35m'     # Violet
+NC='\033[0m' # No Color
+
+# Explication sur le redémarrage en production :
+# En production, le worker doit tourner en continu. S'il s'arrête (crash, OOM, etc.),
+# c'est le process manager (ici s6-overlay) qui doit le relancer automatiquement.
+# Il ne faut pas forcer de redémarrage fréquent en production :
+# - Utiliser des limites raisonnables (--max-time, --memory) pour éviter les fuites mémoire.
+# - Surveiller les logs pour détecter les crashs anormaux.
+# - Adapter la configuration selon la charge réelle.
+
+# Affichage démarrage
+echo -e "${COLOR_INFO}🚀 Démarrage du service Laravel Queue Worker...${NC}"
+
+# Vérifier si le service worker doit être activé
+if [ "$ENABLE_WORKER" != "true" ]; then
+    echo -e "${COLOR_WARN}⚠️  Worker service désactivé. Arrêt du service.${NC}"
+    exit 0
+fi
+
+# Définir le répertoire de travail
+cd /app
+
+# Vérifier si Laravel est installé et accessible
+if ! php artisan --version > /dev/null 2>&1; then
+    echo -e "${COLOR_ERROR}❌ Laravel n'est pas accessible. Vérifiez l'installation.${NC}"
+    exit 1
+fi
+
+echo -e "${COLOR_SUCCESS}✅ Laravel détecté. Démarrage du queue worker...${NC}"
+
+# Configuration selon l'environnement
+if [ "$APP_ENV" = "production" ]; then
+    echo -e "${COLOR_INFO}🏭 Mode production : worker avec limites de sécurité${NC}"
+    WORKER_CMD="php artisan queue:work --sleep=3 --tries=3 --max-time=3600 --memory=512"
+else
+    echo -e "${COLOR_INFO}🔧 Mode développement : worker avec redémarrage fréquent${NC}"
+    WORKER_CMD="php artisan queue:work --sleep=3 --tries=3 --max-time=1800 --memory=256"
+fi
+
+# Configuration des queues spécifiques si définies
+if [ -n "$QUEUE_NAMES" ]; then
+    WORKER_CMD="$WORKER_CMD --queue=$QUEUE_NAMES"
+    echo -e "${COLOR_INFO}📋 Queues configurées : $QUEUE_NAMES${NC}"
+fi
+
+# Lancer le worker avec gestion des signaux
+echo -e "${COLOR_CMD}▶️  Commande : $WORKER_CMD${NC}"
+exec $WORKER_CMD

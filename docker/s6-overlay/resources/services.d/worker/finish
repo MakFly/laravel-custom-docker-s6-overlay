@@ -1,0 +1,18 @@
+#!/command/with-contenv bash
+
+# Couleurs ANSI
+YELLOW='\033[0;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+echo -e "${YELLOW}🔄 Laravel Queue Worker arrêté, redémarrage automatique...${NC}"
+
+# Vérifier le code de sortie
+if [ $1 -ne 0 ]; then
+    echo -e "${RED}⚠️  Worker arrêté avec le code d'erreur: $1${NC}"
+fi
+
+# Code de sortie 0 pour redémarrer automatiquement
+exit 0
+
+############################################################################

@@ -1,0 +1,28 @@
+#!/command/with-contenv bash
+
+# Couleurs ANSI
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+echo -e "${BLUE}🚀 Démarrage du serveur FrankenPHP...${NC}"
+
+# Définir le répertoire de travail
+cd /app
+
+# Vérifier la configuration Caddy
+if [ ! -f /etc/caddy/Caddyfile ]; then
+    echo -e "${RED}❌ Fichier Caddyfile manquant${NC}"
+    exit 1
+fi
+
+# Variables d'environnement pour FrankenPHP
+export PYTHONUNBUFFERED=1
+export FRANKENPHP_CONFIG=/etc/caddy/Caddyfile
+
+echo -e "${GREEN}✅ Configuration FrankenPHP chargée${NC}"
+echo -e "${BLUE}📁 Répertoire de travail : $(pwd)${NC}"
+echo -e "${BLUE}⚙️  Fichier de configuration : $FRANKENPHP_CONFIG${NC}"
+
+# Lancer FrankenPHP
+exec /usr/local/bin/frankenphp run --config /etc/caddy/Caddyfile

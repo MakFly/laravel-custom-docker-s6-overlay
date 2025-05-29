@@ -1,0 +1,117 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: contract
+      POSTGRES_PASSWORD: contract
+      POSTGRES_DB: contract
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  ###> minio ###
+  minio:
+    image: minio/minio
+    container_name: minio-contract
+    ports:
+        - "9000:9000"
+        - "9001:9001"
+    environment:
+        MINIO_ROOT_USER: minioadmin
+        MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+        - minio-data:/data
+
+  ###> webapp ###
+  app:
+    container_name: preavis-laravel-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: final
+      args:
+        ENVIRONMENT: dev
+        SERVER_NAME: :80
+        USE_S6_OVERLAY: true
+        ENABLE_WORKER: true
+        NODE_VERSION: 20
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: contract
+      DB_USERNAME: contract
+      DB_PASSWORD: contract
+      REDIS_HOST: redis
+      REDIS_PASSWORD: null
+      REDIS_PORT: 6379
+      CACHE_DRIVER: redis
+      QUEUE_CONNECTION: redis
+      SESSION_DRIVER: redis
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_BUCKET: contracts
+      AWS_ENDPOINT: http://minio:9000
+      AWS_USE_PATH_STYLE_ENDPOINT: true
+      # Configuration FrankenPHP
+      SERVER_NAME: :80
+      APP_ENV: dev
+      ENABLE_WORKER: true
+    ports:
+      - "8000:80"
+      - "8443:443"
+      - "8443:443/udp"
+    depends_on:
+      - postgres
+      - redis
+      - minio
+    volumes:
+      - .:/app
+      - laravel-storage:/app/storage
+      - laravel-bootstrap-cache:/app/bootstrap/cache
+      - caddy_data:/data
+      - caddy_config:/config
+    # Commentez la ligne suivante en production, elle permet d'avoir de beaux logs lisibles en dev
+    tty: true
+    networks:
+      - default
+  ###< webapp ###
+
+  dozzle:
+    image: amir20/dozzle:latest
+    ports:
+      - "8888:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  adminer:
+    image: adminer:latest
+    ports:
+      - "9080:8080"
+    environment:
+      ADMINER_DESIGN: dark
+      ADMINER_DEFAULT_SERVER: postgres
+      ADMINER_DEFAULT_USER: contract
+      ADMINER_DEFAULT_PASSWORD: contract
+    depends_on:
+      - postgres
+
+volumes:
+  pgdata:
+  minio-data:
+  laravel-storage:
+  laravel-bootstrap-cache:
+  caddy_data:
+  caddy_config:
+
+networks:
+  default:
+    driver: bridge
