@@ -1,0 +1,113 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Laravel Testing Rules
+
+## Testing Strategy
+
+### Test Types Organization
+- **Unit Tests**: `tests/Unit/` for isolated component testing
+- **Feature Tests**: `tests/Feature/` for API and integration testing
+- **Browser Tests**: For end-to-end scenarios (if using Dusk)
+
+### Multi-Tenant Testing
+```php
+// Example from multi-tenant architecture
+public function test_user_can_only_see_own_org_contracts()
+{
+    $org1 = Org::factory()->create();
+    $org2 = Org::factory()->create();
+    
+    $user1 = User::factory()->create(['org_id' => $org1->id]);
+    $contract1 = Contract::factory()->create(['org_id' => $org1->id]);
+    
+    $this->actingAs($user1)
+         ->getJson('/api/contracts')
+         ->assertJsonFragment(['id' => $contract1->id]);
+}
+```
+
+## Test Database Management
+
+### Database Configuration
+- Use SQLite in-memory for fast unit tests
+- Use PostgreSQL for feature tests that need real DB
+- Implement `RefreshDatabase` trait for clean state
+
+### Factory Patterns
+```php
+// Create realistic test data
+class ContractFactory extends Factory
+{
+    public function definition() {
+        return [
+            'org_id' => Org::factory(),
+            'title' => $this->faker->sentence(),
+            'type' => $this->faker->randomElement(['pro', 'perso']),
+            'is_tacit_renewal' => $this->faker->boolean(),
+        ];
+    }
+}
+```
+
+## API Testing Best Practices
+
+### Request Testing
+- Test all HTTP methods (GET, POST, PUT, DELETE)
+- Verify response status codes
+- Check JSON structure and data
+- Test authorization and validation
+
+### Service Testing
+```php
+// Mock external services
+public function test_ocr_service_processes_pdf()
+{
+    Storage::fake('private');
+    $mockService = Mockery::mock(OCRService::class);
+    $mockService->shouldReceive('extractText')->andReturn('test content');
+    
+    // Test service behavior
+}
+```
+
+## Job and Queue Testing
+
+### Job Testing Pattern
+```php
+public function test_ocr_job_processes_contract()
+{
+    Queue::fake();
+    $contract = Contract::factory()->create();
+    
+    ProcessContractOCR::dispatch($contract);
+    
+    Queue::assertPushed(ProcessContractOCR::class);
+    Queue::assertPushed(AnalyzeContractWithAI::class);
+}
+```
+
+### Testing Job Chains
+- Verify job dispatch sequence
+- Test job failure scenarios
+- Mock external service dependencies
+- Validate database state changes
+
+## Docker Test Environment
+
+### Test Database Setup
+```bash
+# Run tests in Docker
+docker exec -it preavis-laravel-app php artisan test
+
+# Specific test suites
+docker exec -it preavis-laravel-app php artisan test --testsuite=Feature
+```
+
+### CI/CD Integration
+- Run tests in isolated containers
+- Use test-specific environment files
+- Cache dependencies between runs
+- Generate coverage reports

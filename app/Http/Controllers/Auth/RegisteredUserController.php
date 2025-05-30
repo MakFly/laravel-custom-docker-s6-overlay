@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules;
 use Inertia\Inertia;
 use Inertia\Response;
+use Illuminate\Support\Str;
 
 class RegisteredUserController extends Controller
 {
@@ -36,10 +37,19 @@ class RegisteredUserController extends Controller
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
 
+        // Create organization first
+        $org = \App\Models\Org::create([
+            'name' => $request->name . "'s Organization",
+            'slug' => Str::slug($request->name . '-org'),
+            'status' => 'active',
+        ]);
+
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
+            'org_id' => $org->id,
+            'role' => 'admin', // First user is admin
         ]);
 
         event(new Registered($user));

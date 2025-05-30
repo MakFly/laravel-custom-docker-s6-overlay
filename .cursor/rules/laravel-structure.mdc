@@ -1,0 +1,38 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Laravel Project Structure Rules
+
+## Project Organization
+
+### Core Application Structure
+- **Models**: Store in `app/Models/` with proper naming (PascalCase, singular)
+- **Controllers**: Organize in `app/Http/Controllers/Api/` for API endpoints
+- **Services**: Business logic in `app/Services/` (e.g., [OCRService.php](mdc:app/Services/OCRService.php))
+- **Jobs**: Background tasks in `app/Jobs/` (e.g., [ProcessContractOCR.php](mdc:app/Jobs/ProcessContractOCR.php))
+- **Requests**: Form validation in `app/Http/Requests/`
+- **Resources**: API transformations in `app/Http/Resources/`
+
+### Configuration Files
+- **Docker**: [Dockerfile](mdc:Dockerfile) and [compose.yml](mdc:compose.yml) for containerization
+- **Environment**: Use [.env](mdc:.env) for environment-specific variables
+- **Composer**: Dependencies managed in [composer.json](mdc:composer.json)
+
+### Multi-Tenant Architecture
+- Follow the pattern defined in [multi-tenant-architecture.md](mdc:docs/multi-tenant-architecture.md)
+- All models should include `org_id` for data isolation
+- Use global scopes for automatic filtering
+
+### Documentation
+- Technical specs in `docs/` directory
+- Implementation notes in [implementation-summary.md](mdc:docs/implementation-summary.md)
+- Architecture decisions documented
+
+## File Naming Conventions
+- Models: `Contract.php`, `User.php` (singular)
+- Controllers: `ContractController.php` (ResourceController)
+- Services: `OCRService.php`, `OpenAIService.php`
+- Jobs: `ProcessContractOCR.php` (descriptive action)
+- Migrations: timestamp + descriptive name

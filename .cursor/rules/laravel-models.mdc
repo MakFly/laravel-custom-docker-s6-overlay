@@ -1,0 +1,60 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Laravel Models & Database Rules
+
+## Eloquent Models Best Practices
+
+### Model Structure
+- Use proper type hints for relationships (see [Contract.php](mdc:app/Models/Contract.php))
+- Define `$fillable` arrays for mass assignment protection
+- Use `$casts` for automatic type conversion (dates, booleans, JSON)
+- Implement accessors/mutators with Attribute class for Laravel 9+
+
+### Model Example Reference
+```php
+// Follow the pattern from Contract model
+protected $fillable = ['org_id', 'title', 'type', ...];
+protected $casts = [
+    'start_date' => 'date',
+    'is_tacit_renewal' => 'boolean',
+    'ai_analysis' => 'array',
+];
+```
+
+### Relationships
+- Use proper return types: `BelongsTo`, `HasMany`, `HasOne`
+- Follow the relationship patterns in [Contract.php](mdc:app/Models/Contract.php)
+- Always define inverse relationships
+
+### Multi-Tenant Models
+- Include `org_id` in fillable arrays
+- Add foreign key constraints with cascade delete
+- Use global scopes for automatic filtering by organization
+
+### Scopes and Helpers
+- Define query scopes for common filters (e.g., `scopeExpiringSoon`)
+- Add helper methods for business logic (e.g., `needsAlert()`)
+- Use descriptive scope names
+
+## Database Design Principles
+
+### Migration Guidelines
+- Use descriptive migration names with timestamps
+- Always include rollback logic in `down()` method
+- Add indexes for foreign keys and frequently queried columns
+- Use proper column types and constraints
+
+### Multi-Tenant Indexes
+```php
+// Example index patterns
+$table->index(['org_id', 'status']);
+$table->index(['org_id', 'next_renewal_date']);
+```
+
+### Relationships & Constraints
+- Use `foreignId()->constrained()->onDelete('cascade')` for FK
+- Ensure referential integrity
+- Consider performance implications of cascading deletes

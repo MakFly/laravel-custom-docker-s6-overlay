@@ -1,0 +1,65 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Laravel Controllers & API Rules
+
+## API Controller Best Practices
+
+### Controller Structure
+- Follow the pattern in [ContractController.php](mdc:app/Http/Controllers/Api/ContractController.php)
+- Use `AuthorizesRequests` trait for policy-based authorization
+- Implement proper HTTP status codes (200, 201, 400, 404, etc.)
+- Use dependency injection for services
+
+### RESTful Resource Controllers
+```php
+// Standard RESTful methods
+public function index()     // GET /resource
+public function show()      // GET /resource/{id}
+public function store()     // POST /resource
+public function update()    // PUT/PATCH /resource/{id}
+public function destroy()   // DELETE /resource/{id}
+```
+
+### Authorization Pattern
+```php
+// Always authorize before actions
+$this->authorize('view', $contract);
+$this->authorize('create', Contract::class);
+$this->authorize('update', $contract);
+```
+
+### Query Optimization
+- Use Spatie Query Builder for filtering/sorting
+- Implement pagination for list endpoints
+- Use `with()` for eager loading relationships
+- Follow the pattern: QueryBuilder::for(Model::class)
+
+### Response Formatting
+- Return consistent JSON responses
+- Use HTTP status codes appropriately
+- Include relevant error messages
+- Consider using API Resources for data transformation
+
+## Form Request Validation
+
+### Request Classes
+- Create dedicated request classes for validation
+- Separate Store and Update requests when logic differs
+- Use proper validation rules and custom messages
+
+### File Upload Handling
+```php
+// Secure file upload pattern
+if ($request->hasFile('contract_file')) {
+    $filePath = $file->store('contracts/' . $user->org_id, 'private');
+}
+```
+
+## Multi-Tenant Security
+- Always filter by organization ID
+- Use global scopes or explicit where clauses
+- Validate user has access to requested resources
+- Log security-related actions

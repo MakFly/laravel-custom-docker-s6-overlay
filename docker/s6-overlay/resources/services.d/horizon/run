@@ -1,0 +1,62 @@
+#!/command/with-contenv bash
+
+# Palette de couleurs harmonisée
+COLOR_INFO='\033[1;36m'    # Cyan clair
+COLOR_SUCCESS='\033[1;32m' # Vert vif
+COLOR_WARN='\033[1;33m'    # Jaune
+COLOR_ERROR='\033[1;31m'   # Rouge vif
+COLOR_CMD='\033[1;35m'     # Violet
+NC='\033[0m' # No Color
+
+# Affichage démarrage
+echo -e "${COLOR_INFO}🚀 Démarrage du service Laravel Horizon...${NC}"
+
+# Vérifier si Horizon doit être activé
+if [ "$ENABLE_HORIZON" != "true" ]; then
+    echo -e "${COLOR_WARN}⚠️  Horizon service désactivé. Arrêt du service.${NC}"
+    exit 0
+fi
+
+# Définir le répertoire de travail
+cd /app
+
+# Vérifier si Laravel est installé et accessible
+if ! php artisan --version > /dev/null 2>&1; then
+    echo -e "${COLOR_ERROR}❌ Laravel n'est pas accessible. Vérifiez l'installation.${NC}"
+    exit 1
+fi
+
+# Vérifier si Horizon est installé
+if ! php artisan horizon:list > /dev/null 2>&1; then
+    echo -e "${COLOR_ERROR}❌ Laravel Horizon n'est pas installé ou configuré.${NC}"
+    exit 1
+fi
+
+# Vérifier la connexion Redis (requise pour Horizon)
+if ! php artisan tinker --execute="try { \Illuminate\Support\Facades\Redis::ping(); echo 'Redis OK'; } catch(\Exception \$e) { echo 'Redis Error: ' . \$e->getMessage(); exit(1); }" > /dev/null 2>&1; then
+    echo -e "${COLOR_ERROR}❌ Redis n'est pas accessible. Horizon nécessite Redis.${NC}"
+    exit 1
+fi
+
+echo -e "${COLOR_SUCCESS}✅ Laravel et Redis détectés. Démarrage d'Horizon...${NC}"
+
+# Configuration selon l'environnement
+if [ "$APP_ENV" = "production" ]; then
+    echo -e "${COLOR_INFO}🏭 Mode production : Horizon avec configuration optimisée${NC}"
+else
+    echo -e "${COLOR_INFO}🔧 Mode développement : Horizon avec monitoring actif${NC}"
+fi
+
+# Nettoyer les anciens processus Horizon (si présents)
+echo -e "${COLOR_INFO}🧹 Nettoyage des anciens processus Horizon...${NC}"
+php artisan horizon:terminate 2>/dev/null || true
+
+# Attendre que les processus se terminent proprement
+sleep 2
+
+# Lancer Horizon
+echo -e "${COLOR_CMD}▶️  Démarrage: php artisan horizon${NC}"
+echo -e "${COLOR_SUCCESS}🌟 Horizon dashboard accessible sur /horizon${NC}"
+
+# Exécuter Horizon avec gestion des signaux
+exec php artisan horizon 

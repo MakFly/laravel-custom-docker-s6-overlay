@@ -1,0 +1,101 @@
+---
+description: 
+globs: .php,.yaml
+alwaysApply: false
+---
+# Docker & Laravel Rules
+
+## Docker Configuration
+
+### Dockerfile Best Practices
+- Follow the multi-stage build pattern in [Dockerfile](mdc:Dockerfile)
+- Use FrankenPHP as base image for performance
+- Install PHP extensions with `install-php-extensions`
+- Separate dev and prod configurations
+
+### Required PHP Extensions
+```dockerfile
+RUN install-php-extensions \
+    @composer \
+    pdo_pgsql \
+    redis \
+    gd \
+    bcmath \
+    imagick \
+    zip \
+    exif
+```
+
+### System Dependencies
+- **tesseract-ocr**: For OCR processing
+- **poppler-utils**: PDF to image conversion
+- **imagemagick**: Image manipulation
+- **Node.js**: Frontend asset compilation
+
+## Docker Compose Setup
+
+### Service Architecture
+- **app**: Laravel application with FrankenPHP
+- **postgres**: Database service
+- **redis**: Cache and queue backend
+- **minio**: S3-compatible storage
+- **adminer**: Database administration
+
+### Volume Management
+```yaml
+volumes:
+  - .:/app                    # Development bind mount
+  - laravel-storage:/app/storage
+  - laravel-bootstrap-cache:/app/bootstrap/cache
+```
+
+### Environment Variables
+- Database credentials
+- Redis configuration
+- S3/MinIO settings
+- Application environment
+
+## Development Workflow
+
+### Container Commands
+```bash
+# Start services
+docker-compose up -d
+
+# Run Laravel commands
+docker exec -it preavis-laravel-app php artisan migrate
+docker exec -it preavis-laravel-app php artisan queue:work
+
+# Install packages
+docker exec -it preavis-laravel-app composer install
+```
+
+### File Permissions
+- Use proper ownership for Laravel directories
+- Set 775 permissions for storage and cache
+- Handle permission issues in multi-user environments
+
+### Queue Workers in Docker
+- Use s6-overlay for process supervision
+- Configure worker processes in [Dockerfile](mdc:Dockerfile)
+- Monitor worker health and restart policies
+
+## Production Considerations
+
+### Performance Optimization
+- Enable OPcache in production
+- Use optimized autoloader
+- Cache configuration and routes
+- Minimize container layers
+
+### Security
+- Run containers as non-root user
+- Use secrets for sensitive data
+- Secure inter-service communication
+- Regular security updates
+
+### Monitoring
+- Container health checks
+- Log aggregation and rotation
+- Resource usage monitoring
+- Queue worker supervision

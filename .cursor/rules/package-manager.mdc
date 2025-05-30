@@ -1,0 +1,24 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Package Manager Rules
+
+## Use PNPM Only
+
+**NEVER use npm or yarn for installing packages.** Always use `pnpm` for package management.
+
+### Correct Commands:
+- `pnpm install` instead of `npm install`
+- `pnpm add <package>` instead of `npm install <package>`
+- `pnpm add -D <package>` instead of `npm install --save-dev <package>`
+- `pnpm remove <package>` instead of `npm uninstall <package>`
+- `pnpm run <script>` instead of `npm run <script>`
+
+### Why PNPM:
+- Faster installation and better disk space usage
+- Better dependency resolution
+- Consistent with project setup
+
+**Always suggest pnpm commands when package installation is needed.**

@@ -1,0 +1,80 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Laravel Jobs & Queues Rules
+
+## Job Design Patterns
+
+### Job Structure
+- Follow the patterns in [ProcessContractOCR.php](mdc:app/Jobs/ProcessContractOCR.php) and [AnalyzeContractWithAI.php](mdc:app/Jobs/AnalyzeContractWithAI.php)
+- Use proper constructor property promotion
+- Set appropriate timeout and retry values
+- Assign jobs to specific queues based on priority
+
+### Job Best Practices
+```php
+class ProcessContractOCR implements ShouldQueue
+{
+    public $timeout = 300;  // 5 minutes
+    public $tries = 3;      // Retry attempts
+    
+    public function __construct(public Contract $contract) {
+        $this->onQueue('ocr');  // Specific queue
+    }
+}
+```
+
+### Queue Organization
+- **ocr**: OCR processing jobs (CPU intensive)
+- **analysis**: AI analysis jobs (API dependent)
+- **notifications**: Email/SMS sending
+- **default**: General background tasks
+
+### Error Handling
+- Implement `failed()` method for cleanup
+- Log errors with contextual information
+- Update model status on failure
+- Use try-catch for external service calls
+
+### Job Chaining Pattern
+```php
+// Chain jobs for processing pipeline
+ProcessContractOCR::dispatch($contract);
+// → triggers AnalyzeContractWithAI
+// → triggers CreateContractAlerts
+```
+
+## Queue Configuration
+
+### Redis Setup
+- Use Redis for queue backend (configured in [compose.yml](mdc:compose.yml))
+- Configure separate databases for cache and queues
+- Monitor queue length and processing times
+
+### Horizon Management
+- Use Laravel Horizon for queue monitoring
+- Configure in `config/horizon.php`
+- Set up proper supervision and balancing
+
+### Docker Queue Workers
+- Workers run inside Docker container
+- Use supervisor or s6-overlay for process management
+- Configure worker memory limits and restart policies
+
+## Job Monitoring & Logging
+
+### Logging Strategy
+```php
+Log::info('Starting OCR processing', [
+    'contract_id' => $this->contract->id,
+    'file_path' => $this->contract->file_path
+]);
+```
+
+### Performance Considerations
+- Set realistic timeouts for external APIs
+- Implement circuit breakers for failing services
+- Use exponential backoff for retries
+- Monitor queue depth and processing rates

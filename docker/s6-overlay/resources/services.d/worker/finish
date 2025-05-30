@@ -3,7 +3,14 @@
 # Couleurs ANSI
 YELLOW='\033[0;33m'
 RED='\033[0;31m'
+GREEN='\033[0;32m'
 NC='\033[0m' # No Color
+
+# Vérifier si le worker est désactivé
+if [ "$ENABLE_WORKER" != "true" ]; then
+    echo -e "${GREEN}✅ Worker service désactivé - pas de redémarrage automatique${NC}"
+    exit 125  # Code spécial s6-overlay pour ne pas redémarrer
+fi
 
 echo -e "${YELLOW}🔄 Laravel Queue Worker arrêté, redémarrage automatique...${NC}"
 

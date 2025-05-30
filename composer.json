@@ -1,18 +1,31 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "laravel/react-starter-kit",
+    "name": "contract-tacit/laravel-saas",
     "type": "project",
-    "description": "The skeleton application for the Laravel framework.",
+    "description": "SaaS Laravel monolith pour la gestion de contrats et éviter la reconduction tacite",
     "keywords": [
         "laravel",
-        "framework"
+        "contracts",
+        "saas",
+        "ocr",
+        "ai"
     ],
     "license": "MIT",
     "require": {
         "php": "^8.2",
         "inertiajs/inertia-laravel": "^2.0",
+        "intervention/image": "^3.0",
+        "laravel/cashier": "^15.4",
         "laravel/framework": "^12.0",
+        "laravel/horizon": "^5.28",
+        "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.10.1",
+        "league/flysystem-aws-s3-v3": "^3.28",
+        "openai-php/client": "^0.10",
+        "spatie/laravel-csp": "^3.13",
+        "spatie/laravel-query-builder": "^6.0",
+        "spatie/pdf-to-image": "^3.0",
+        "thiagoalessio/tesseract_ocr": "^2.13",
         "tightenco/ziggy": "^2.4"
     },
     "require-dev": {
@@ -23,7 +36,8 @@
         "mockery/mockery": "^1.6",
         "nunomaduro/collision": "^8.6",
         "pestphp/pest": "^3.8",
-        "pestphp/pest-plugin-laravel": "^3.2"
+        "pestphp/pest-plugin-laravel": "^3.2",
+        "laravel/telescope": "^5.2"
     },
     "autoload": {
         "psr-4": {

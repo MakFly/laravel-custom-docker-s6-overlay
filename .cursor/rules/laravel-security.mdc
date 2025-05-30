@@ -1,0 +1,104 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Laravel Security Rules
+
+## Multi-Tenant Security
+
+### Data Isolation
+- **Global Scopes**: Automatically filter by `org_id` on all models
+- **Route Model Binding**: Verify user has access to requested resources
+- **Policy Authorization**: Check org membership in all policies
+- **SQL Injection Prevention**: Use Eloquent ORM and parameter binding
+
+### Authorization Patterns
+```php
+// Policy example for multi-tenant access
+public function view(User $user, Contract $contract)
+{
+    return $user->org_id === $contract->org_id;
+}
+
+// Controller authorization
+$this->authorize('view', $contract);
+```
+
+### Access Control Implementation
+- Follow patterns in [multi-tenant-architecture.md](mdc:docs/multi-tenant-architecture.md)
+- Implement middleware for organization access control
+- Use Sanctum for API authentication
+- Validate all user inputs and file uploads
+
+## File Security
+
+### Secure File Upload
+```php
+// Secure upload pattern from ContractController
+if ($request->hasFile('contract_file')) {
+    $file = $request->file('contract_file');
+    $filePath = $file->store('contracts/' . $user->org_id, 'private');
+}
+```
+
+### File Access Control
+- Store sensitive files outside public directory
+- Use private disk for confidential documents
+- Validate file types and sizes
+- Scan for malware in uploaded files
+
+## API Security
+
+### Authentication & Authorization
+- Use Laravel Sanctum for stateless API authentication
+- Implement rate limiting on API endpoints
+- Validate all request parameters
+- Use HTTPS in production
+
+### Input Validation
+```php
+// Form Request validation
+public function rules()
+{
+    return [
+        'title' => 'required|string|max:255',
+        'type' => 'required|in:pro,perso',
+        'contract_file' => 'required|file|mimes:pdf,jpg,png|max:10240',
+    ];
+}
+```
+
+## Environment Security
+
+### Configuration Security
+- Use `.env` files for sensitive configuration
+- Encrypt sensitive data at rest
+- Use separate environments for dev/staging/prod
+- Implement proper key rotation
+
+### Docker Security
+- Run containers as non-root user
+- Use secrets management for credentials
+- Keep base images updated
+- Implement container security scanning
+
+### Production Hardening
+- Disable debug mode in production
+- Use HTTPS/TLS for all communications
+- Implement proper logging and monitoring
+- Regular security updates and patches
+
+## Data Protection
+
+### Encryption
+- Encrypt sensitive database fields
+- Use Laravel's encryption helpers
+- Implement key management policies
+- Consider field-level encryption for PII
+
+### Logging Security
+- Log security events and access attempts
+- Avoid logging sensitive data
+- Implement log rotation and retention
+- Monitor for suspicious activities

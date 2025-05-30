@@ -1,0 +1,84 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Laravel Services & Architecture Rules
+
+## Service Layer Architecture
+
+### Service Design Principles
+- Follow the patterns in [OCRService.php](mdc:app/Services/OCRService.php) and [OpenAIService.php](mdc:app/Services/OpenAIService.php)
+- Single Responsibility Principle - one service per domain
+- Dependency injection for external services
+- Proper error handling and logging
+
+### Service Structure Example
+```php
+class OCRService
+{
+    public function __construct() {
+        // Initialize dependencies
+    }
+    
+    public function extractText(string $filePath): string {
+        // Core business logic
+    }
+    
+    private function cleanText(string $text): string {
+        // Helper methods
+    }
+}
+```
+
+### External Service Integration
+- Wrap external APIs in service classes
+- Implement circuit breaker patterns
+- Add retry logic with exponential backoff
+- Mock external services in tests
+
+## Business Logic Organization
+
+### Service Responsibilities
+- **OCRService**: PDF/image text extraction
+- **OpenAIService**: Contract analysis with AI
+- **SubscriptionService**: Stripe integration (future)
+- **NotificationService**: Email/SMS alerts
+
+### Error Handling Strategy
+```php
+try {
+    $result = $externalService->call();
+    Log::info('Service call successful');
+    return $result;
+} catch (Exception $e) {
+    Log::error('Service failed', ['error' => $e->getMessage()]);
+    return $this->getFallbackResponse();
+}
+```
+
+### Configuration Management
+- Use config files for service settings
+- Environment variables for API keys
+- Validate configuration on service boot
+- Provide configuration test methods
+
+## Clean Architecture Patterns
+
+### Dependency Injection
+- Register services in AppServiceProvider
+- Use interfaces for testability
+- Inject services into jobs and controllers
+- Avoid static service calls
+
+### Data Transfer Objects
+- Use arrays or DTOs for service communication
+- Validate input data in service methods
+- Return consistent response formats
+- Document expected data structures
+
+### Testing Services
+- Mock external dependencies
+- Test both success and failure cases
+- Verify logging and error handling
+- Use feature tests for integration scenarios

@@ -13,11 +13,22 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        // Créer d'abord les organisations
+        $this->call([
+            OrgSeeder::class,
+        ]);
+
+        // Puis créer les utilisateurs de test
         // User::factory(10)->create();
 
+        // Créer un utilisateur de test avec org_id
+        $testOrg = \App\Models\Org::where('slug', 'default-org')->first();
+        
         User::factory()->create([
             'name' => 'Test User',
             'email' => 'test@example.com',
+            'org_id' => $testOrg->id,
+            'role' => 'user',
         ]);
     }
 }

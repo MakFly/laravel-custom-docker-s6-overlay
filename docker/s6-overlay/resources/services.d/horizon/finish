@@ -1,0 +1,32 @@
+#!/command/with-contenv bash
+
+# Couleurs ANSI
+YELLOW='\033[0;33m'
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+GREEN='\033[0;32m'
+NC='\033[0m' # No Color
+
+# Vérifier si Horizon est désactivé
+if [ "$ENABLE_HORIZON" != "true" ]; then
+    echo -e "${GREEN}✅ Horizon service désactivé - pas de redémarrage automatique${NC}"
+    exit 125  # Code spécial s6-overlay pour ne pas redémarrer
+fi
+
+echo -e "${YELLOW}🔄 Laravel Horizon arrêté, nettoyage et redémarrage automatique...${NC}"
+
+# Vérifier le code de sortie
+if [ $1 -ne 0 ]; then
+    echo -e "${RED}⚠️  Horizon arrêté avec le code d'erreur: $1${NC}"
+fi
+
+# Nettoyer les processus Horizon si nécessaire
+echo -e "${BLUE}🧹 Nettoyage des processus Horizon restants...${NC}"
+cd /app
+php artisan horizon:terminate 2>/dev/null || true
+
+# Attendre un peu avant de redémarrer
+sleep 1
+
+# Code de sortie 0 pour redémarrer automatiquement
+exit 0 

@@ -1,0 +1,119 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Laravel Performance Rules
+
+## Database Optimization
+
+### Query Optimization
+```php
+// Eager loading to prevent N+1 queries
+$contracts = Contract::with(['alerts', 'clauses'])->get();
+
+// Use pagination for large datasets
+$contracts = Contract::paginate(15);
+
+// Specific selects when only some fields needed
+$contracts = Contract::select('id', 'title', 'status')->get();
+```
+
+### Indexing Strategy
+- Add indexes for frequently queried columns
+- Multi-column indexes for complex queries
+- Foreign key indexes for relationships
+- Follow the index patterns in multi-tenant setup
+
+### Database Connection
+- Use connection pooling in production
+- Configure query caching
+- Monitor slow queries and optimize
+- Use read replicas for heavy read workloads
+
+## Caching Strategies
+
+### Redis Caching
+```php
+// Cache expensive AI analysis results
+$analysis = Cache::remember("contract.{$id}.analysis", 3600, function() {
+    return $this->aiService->analyzeContract($text);
+});
+
+// Cache user permissions
+$permissions = Cache::tags(['user', "org.{$orgId}"])
+    ->remember("user.{$userId}.permissions", 1800, function() {
+        return $this->getUserPermissions($userId);
+    });
+```
+
+### Cache Organization
+- Use cache tags for group invalidation
+- Separate cache namespaces by organization
+- Cache configuration and routes in production
+- Implement cache warming strategies
+
+## Queue Performance
+
+### Queue Optimization
+- Use Redis for queue backend (faster than database)
+- Separate queues by priority and type
+- Monitor queue depth and processing times
+- Implement queue batching for bulk operations
+
+### Job Optimization
+```php
+// Chunk large datasets in jobs
+public function handle()
+{
+    Contract::chunk(100, function ($contracts) {
+        foreach ($contracts as $contract) {
+            // Process contract
+        }
+    });
+}
+```
+
+## Asset Optimization
+
+### Frontend Performance
+- Use Vite for fast asset compilation
+- Implement code splitting for JS bundles
+- Optimize images before storage
+- Use CDN for static assets
+
+### File Processing
+- Resize images before OCR processing
+- Implement progressive PDF processing
+- Use background jobs for heavy operations
+- Cache processed results
+
+## Docker Performance
+
+### Container Optimization
+- Use multi-stage builds to reduce image size
+- Enable OPcache in production
+- Configure proper memory limits
+- Use Alpine Linux for smaller images
+
+### Development Performance
+```yaml
+# Use bind mounts efficiently
+volumes:
+  - .:/app:cached  # Use cached mode on macOS
+  - /app/vendor    # Use anonymous volume for vendor
+```
+
+## Monitoring & Profiling
+
+### Performance Monitoring
+- Use Laravel Telescope for development debugging
+- Implement application performance monitoring (APM)
+- Monitor Redis memory usage and hit rates
+- Track queue processing metrics
+
+### Database Monitoring
+- Monitor query execution times
+- Track database connection counts
+- Analyze slow query logs
+- Monitor index usage statistics
