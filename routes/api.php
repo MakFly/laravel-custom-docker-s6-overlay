@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\ContractController;
 use App\Http\Controllers\Api\AlertController;
 use App\Http\Controllers\Api\OrgController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\ErrorController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -35,7 +36,9 @@ Route::middleware(['auth'])->group(function () {
         // Actions spéciales
         Route::post('/{contract}/reprocess', [ContractController::class, 'reprocess'])->name('reprocess');
         Route::post('/{contract}/reanalyze', [ContractController::class, 'reanalyze'])->name('reanalyze');
+        Route::post('/{contract}/force-reanalyze', [ContractController::class, 'forceReanalyze'])->name('force-reanalyze');
         Route::get('/{contract}/download', [ContractController::class, 'download'])->name('download');
+        Route::get('/{contract}/view', [ContractController::class, 'view'])->name('view');
         Route::get('/{contract}/status', [ContractController::class, 'status'])->name('status');
         Route::get('/{contract}/ocr-text', [ContractController::class, 'getOcrText'])->name('ocr-text');
         Route::get('/{contract}/ocr-metadata', [ContractController::class, 'getOcrMetadata'])->name('ocr-metadata');
@@ -67,12 +70,17 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/settings', [OrgController::class, 'updateSettings'])->name('update-settings');
     });
 
-    // Abonnements (Stripe Cashier) - à implémenter plus tard
-    Route::prefix('subscription')->name('api.subscription.')->group(function () {
-        Route::get('/', function() {
-            return response()->json(['message' => 'Subscription management coming soon']);
-        })->name('current');
+    // Gestion des crédits et abonnements
+    Route::prefix('credits')->name('api.credits.')->group(function () {
+        Route::get('/', [App\Http\Controllers\Api\CreditsController::class, 'index'])->name('index');
+        Route::get('/history', [App\Http\Controllers\Api\CreditsController::class, 'history'])->name('history');
+        Route::get('/check-ai', [App\Http\Controllers\Api\CreditsController::class, 'checkAiAvailability'])->name('check-ai');
+        Route::post('/change-subscription', [App\Http\Controllers\Api\CreditsController::class, 'changeSubscription'])->name('change-subscription');
+        Route::post('/purchase', [App\Http\Controllers\Api\CreditsController::class, 'purchaseCredits'])->name('purchase');
     });
+
+    // Logging des erreurs client
+    Route::post('/errors', [ErrorController::class, 'store'])->name('api.errors.store');
 
     // Routes Sanctum pour l'API externe
     Route::middleware(['auth:sanctum'])->prefix('external')->group(function () {

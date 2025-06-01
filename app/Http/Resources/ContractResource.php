@@ -40,6 +40,7 @@ class ContractResource extends JsonResource
             
             // OCR and AI
             'ocr_status' => $this->ocr_status,
+            'ai_status' => $this->ai_status ?? 'pending', // Assurer qu'il y a toujours une valeur
             'has_ocr_text' => !empty($this->ocr_raw_text),
             'ocr_text_length' => $this->ocr_raw_text ? strlen($this->ocr_raw_text) : 0,
             'has_ai_analysis' => !empty($this->ai_analysis),
@@ -72,6 +73,7 @@ class ContractResource extends JsonResource
             'links' => [
                 'self' => route('api.contracts.show', $this->id),
                 'download' => route('api.contracts.download', $this->id),
+                'view' => route('api.contracts.view', $this->id),
                 'reprocess' => route('api.contracts.reprocess', $this->id),
                 'analysis' => route('api.contracts.analysis', $this->id),
                 'ocr_text' => route('api.contracts.ocr-text', $this->id),

@@ -32,6 +32,7 @@ class OrgFactory extends Factory
                 ],
                 'contracts_limit' => fake()->randomElement([50, 200, -1]),
                 'users_limit' => fake()->randomElement([3, 10, -1]),
+                'subscription_plan' => fake()->randomElement(['starter', 'pro', 'premium', 'enterprise']),
             ],
             'trial_ends_at' => fake()->optional()->dateTimeBetween('now', '+30 days'),
         ];

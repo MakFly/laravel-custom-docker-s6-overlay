@@ -3,20 +3,19 @@ import AppLayout from '@/layouts/app-layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+// import { SimplePDFViewer } from '@/components/ui/simple-pdf-viewer';
 import { 
   ArrowLeft, 
   FileText, 
   Copy,
   Download,
   Eye,
-  AlertTriangle,
-  ZoomIn,
-  ZoomOut,
-  RotateCw
+  AlertTriangle
 } from 'lucide-react';
 import { Link } from '@inertiajs/react';
 import { toast } from 'react-hot-toast';
 import { useState } from 'react';
+import { PDFViewer } from '@/components/ui/pdf-viewer';
 
 interface Contract {
     id: number;
@@ -37,7 +36,6 @@ interface OcrResultsProps {
 
 export default function OcrResults({ contract }: OcrResultsProps) {
     const [copied, setCopied] = useState(false);
-    const [pdfError, setPdfError] = useState(false);
 
     const handleCopyText = async () => {
         if (contract.ocr_raw_text) {
@@ -46,7 +44,7 @@ export default function OcrResults({ contract }: OcrResultsProps) {
                 setCopied(true);
                 toast.success('Texte copié dans le presse-papiers');
                 setTimeout(() => setCopied(false), 2000);
-            } catch (error) {
+            } catch {
                 toast.error('Erreur lors de la copie');
             }
         }
@@ -70,7 +68,8 @@ export default function OcrResults({ contract }: OcrResultsProps) {
     const textLength = contract.ocr_raw_text?.length || 0;
     const wordCount = contract.ocr_raw_text ? contract.ocr_raw_text.split(/\s+/).length : 0;
 
-    const pdfUrl = `/api/contracts/${contract.id}/download`;
+    const pdfViewUrl = `/api/contracts/${contract.id}/view`;
+    const pdfDownloadUrl = `/api/contracts/${contract.id}/download`;
 
     return (
         <AppLayout>
@@ -90,14 +89,14 @@ export default function OcrResults({ contract }: OcrResultsProps) {
                                     Retour au contrat
                                 </Link>
                             </div>
-                            <div className="flex items-center space-x-3">
+                            {/* <div className="flex items-center space-x-3">
                                 <Button variant="outline" size="sm" asChild>
-                                    <a href={pdfUrl} target="_blank" rel="noopener noreferrer">
+                                    <a href={pdfDownloadUrl} target="_blank" rel="noopener noreferrer">
                                         <Download className="w-4 h-4 mr-2" />
                                         Télécharger PDF
                                     </a>
                                 </Button>
-                            </div>
+                            </div> */}
                         </div>
 
                         <div className="mt-4">
@@ -153,73 +152,17 @@ export default function OcrResults({ contract }: OcrResultsProps) {
                     {/* Vue principale avec PDF et OCR */}
                     {contract.ocr_status === 'completed' && contract.ocr_raw_text ? (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {/* Lecteur PDF */}
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="flex items-center justify-between">
-                                        <span className="flex items-center">
-                                            <FileText className="w-5 h-5 mr-2" />
-                                            Document PDF
-                                        </span>
-                                        <div className="flex items-center space-x-2">
-                                            <Button variant="outline" size="sm" asChild>
-                                                <a href={pdfUrl} target="_blank" rel="noopener noreferrer">
-                                                    <Eye className="w-4 h-4 mr-1" />
-                                                    Ouvrir
-                                                </a>
-                                            </Button>
-                                        </div>
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="p-0">
-                                    <div className="relative h-[800px] bg-gray-100 rounded-b-lg overflow-hidden">
-                                        {!pdfError ? (
-                                            <object
-                                                data={`${pdfUrl}#toolbar=1&navpanes=1&scrollbar=1&page=1&view=FitH`}
-                                                type="application/pdf"
-                                                className="w-full h-full"
-                                                title={`PDF - ${contract.title}`}
-                                            >
-                                                <div className="flex items-center justify-center h-full">
-                                                    <div className="text-center">
-                                                        <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                                                        <h3 className="text-lg font-medium text-gray-900 mb-2">
-                                                            Visualisation PDF non disponible
-                                                        </h3>
-                                                        <p className="text-gray-600 mb-4">
-                                                            Votre navigateur ne supporte pas l'affichage PDF intégré.
-                                                        </p>
-                                                        <Button variant="outline" asChild>
-                                                            <a href={pdfUrl} target="_blank" rel="noopener noreferrer">
-                                                                <Eye className="w-4 h-4 mr-2" />
-                                                                Ouvrir le PDF
-                                                            </a>
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            </object>
-                                        ) : (
-                                            <div className="flex items-center justify-center h-full">
-                                                <div className="text-center">
-                                                    <AlertTriangle className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                                                    <h3 className="text-lg font-medium text-gray-900 mb-2">
-                                                        Impossible d'afficher le PDF
-                                                    </h3>
-                                                    <p className="text-gray-600 mb-4">
-                                                        Le navigateur ne peut pas afficher ce fichier PDF.
-                                                    </p>
-                                                    <Button variant="outline" asChild>
-                                                        <a href={pdfUrl} target="_blank" rel="noopener noreferrer">
-                                                            <Download className="w-4 h-4 mr-2" />
-                                                            Télécharger le PDF
-                                                        </a>
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </CardContent>
-                            </Card>
+                            {/* Lecteur PDF simple avec iframe */}
+                            <PDFViewer
+                                file={pdfViewUrl}
+                                title={`Document PDF - ${contract.title}`}
+                                downloadUrl={pdfDownloadUrl}
+                            />
+                            {/* <SimplePDFViewer
+                                file={pdfViewUrl}
+                                title={`Document PDF - ${contract.title}`}
+                                downloadUrl={pdfDownloadUrl}
+                            /> */}
 
                             {/* Texte OCR */}
                             <Card>

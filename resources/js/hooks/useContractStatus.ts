@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
+import { contractApi } from '../services/api';
 
 interface ContractStatus {
   id: number;
   ocr_status: string;
-  ai_status?: string;
+  ai_status: string; // Plus optionnel maintenant
   has_ocr_text: boolean;
   has_ai_analysis: boolean;
   updated_at: string;
@@ -17,29 +18,7 @@ interface UseContractStatusOptions {
 }
 
 async function fetchContractStatus(contractId: number): Promise<ContractStatus> {
-  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-  
-  const response = await fetch(`/api/contracts/${contractId}/status`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'X-Requested-With': 'XMLHttpRequest',
-      ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken }),
-    },
-    credentials: 'same-origin',
-  });
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      // Redirect to login using Inertia
-      window.location.href = '/login';
-      throw new Error('Non authentifié');
-    }
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-  }
-
-  return response.json();
+  return contractApi.getStatus(contractId);
 }
 
 export function useContractStatus({
@@ -96,6 +75,12 @@ export function useContractStatus({
     setIsPolling(false);
   };
 
+  // Méthode pour forcer le démarrage du polling (utilisée après retraitement)
+  const forceStartPolling = () => {
+    stopPolling(); // Arrêter le polling existant s'il y en a un
+    startPolling(); // Redémarrer le polling
+  };
+
   // Nettoyage à la destruction du composant
   useEffect(() => {
     return () => {
@@ -104,11 +89,17 @@ export function useContractStatus({
   }, []);
 
   // Auto-start polling si le statut initial indique un traitement en cours
+  // ou si le statut change pour indiquer un traitement
   useEffect(() => {
-    if (status && (status.ocr_status === 'processing' || status.ai_status === 'processing')) {
+    if (status && (
+      status.ocr_status === 'processing' || 
+      status.ocr_status === 'pending' ||
+      status.ai_status === 'processing' ||
+      status.ai_status === 'pending'
+    )) {
       startPolling();
     }
-  }, [contractId]);
+  }, [contractId, status?.ocr_status, status?.ai_status]);
 
   return {
     status,
@@ -116,6 +107,7 @@ export function useContractStatus({
     error,
     startPolling,
     stopPolling,
+    forceStartPolling, // Nouvelle méthode exposée
     refetch: fetchStatus
   };
 } 

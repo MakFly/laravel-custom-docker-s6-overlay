@@ -1,0 +1,71 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Lucide React Icons Rule
+
+## Icon Library Standard
+
+**ALWAYS use `lucide-react` for icons, NEVER use `@heroicons/react` or other icon libraries.**
+
+### Why Lucide React?
+- Consistent design system
+- Better TypeScript support
+- Lighter bundle size
+- More comprehensive icon set
+- Better tree-shaking
+
+### Import Pattern
+```tsx
+// ✅ CORRECT
+import { Bell, CheckCircle, Clock, Upload, X } from 'lucide-react';
+
+// ❌ WRONG - Never use heroicons
+import { BellIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
+```
+
+### Icon Name Mapping
+Common heroicons to lucide-react conversions:
+
+| Heroicons | Lucide React |
+|-----------|--------------|
+| `BellIcon` | `Bell` |
+| `CheckCircleIcon` | `CheckCircle` |
+| `ClockIcon` | `Clock` |
+| `XMarkIcon` | `X` |
+| `ExclamationTriangleIcon` | `AlertTriangle` |
+| `DocumentTextIcon` | `FileText` |
+| `CloudArrowUpIcon` | `CloudArrowUp` |
+| `DocumentArrowUpIcon` | `Upload` |
+| `ChartBarIcon` | `BarChart3` |
+| `CurrencyEuroIcon` | `Euro` |
+| `ShieldCheckIcon` | `ShieldCheck` |
+| `XCircleIcon` | `XCircle` |
+
+### Usage Examples
+```tsx
+// Standard icon usage
+<Bell className="h-5 w-5 text-indigo-600" />
+<CheckCircle className="mr-3 h-5 w-5 text-green-500" />
+
+// With conditional styling
+<AlertTriangle className={`h-4 w-4 ${isError ? 'text-red-500' : 'text-yellow-500'}`} />
+
+// In button components
+<button>
+  <X className="h-6 w-6" />
+</button>
+```
+
+### Installation
+Ensure lucide-react is installed:
+```bash
+pnpm add lucide-react
+```
+
+### References
+- Files already converted: [Landing.tsx](mdc:resources/js/Pages/Landing.tsx), [Pricing.tsx](mdc:resources/js/Pages/Pricing.tsx), [Onboarding.tsx](mdc:resources/js/Pages/Onboarding.tsx)
+- Component examples: [ContractCard.tsx](mdc:resources/js/components/ContractCard.tsx), [ContractUpload.tsx](mdc:resources/js/components/ContractUpload.tsx)
+
+**Remember: Always use lucide-react icons with proper naming (no "Icon" suffix).**

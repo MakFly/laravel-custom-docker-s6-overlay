@@ -23,57 +23,59 @@ class DashboardController extends Controller
     public function stats(Request $request)
     {
         $user = $request->user();
+        $orgId = $user->org_id;
         
         // Statistiques des contrats
         $contractStats = [
-            'total' => Contract::count(),
-            'active' => Contract::where('status', 'active')->count(),
-            'professional' => Contract::where('type', 'pro')->count(),
-            'personal' => Contract::where('type', 'perso')->count(),
-            'with_tacit_renewal' => Contract::where('is_tacit_renewal', true)->count(),
-            'expiring_soon' => Contract::expiringSoon(30)->count(),
-            'expiring_this_week' => Contract::expiringSoon(7)->count(),
-            'pending_ocr' => Contract::where('ocr_status', 'pending')->count(),
-            'failed_ocr' => Contract::where('ocr_status', 'failed')->count(),
+            'total' => Contract::where('org_id', $orgId)->count(),
+            'active' => Contract::where('org_id', $orgId)->where('status', 'active')->count(),
+            'professional' => Contract::where('org_id', $orgId)->where('type', 'pro')->count(),
+            'personal' => Contract::where('org_id', $orgId)->where('type', 'perso')->count(),
+            'with_tacit_renewal' => Contract::where('org_id', $orgId)->where('is_tacit_renewal', true)->count(),
+            'expiring_soon' => Contract::where('org_id', $orgId)->expiringSoon(30)->count(),
+            'expiring_this_week' => Contract::where('org_id', $orgId)->expiringSoon(7)->count(),
+            'pending_ocr' => Contract::where('org_id', $orgId)->where('ocr_status', 'pending')->count(),
+            'failed_ocr' => Contract::where('org_id', $orgId)->where('ocr_status', 'failed')->count(),
         ];
 
         // Montants
         $amounts = [
-            'total_active' => Contract::where('status', 'active')->sum('amount_cents') / 100,
-            'monthly_professional' => Contract::where('type', 'pro')
+            'total_active' => Contract::where('org_id', $orgId)->where('status', 'active')->sum('amount_cents') / 100,
+            'monthly_professional' => Contract::where('org_id', $orgId)->where('type', 'pro')
                 ->where('status', 'active')
                 ->sum('amount_cents') / 100,
-            'monthly_personal' => Contract::where('type', 'perso')
+            'monthly_personal' => Contract::where('org_id', $orgId)->where('type', 'perso')
                 ->where('status', 'active')
                 ->sum('amount_cents') / 100,
         ];
 
         // Statistiques des alertes
         $alertStats = [
-            'total_pending' => Alert::whereHas('contract', function($q) use ($user) {
-                $q->where('user_id', $user->id);
+            'total_pending' => Alert::whereHas('contract', function($q) use ($orgId) {
+                $q->where('org_id', $orgId);
             })->where('status', 'pending')->count(),
             
-            'due_today' => Alert::whereHas('contract', function($q) use ($user) {
-                $q->where('user_id', $user->id);
+            'due_today' => Alert::whereHas('contract', function($q) use ($orgId) {
+                $q->where('org_id', $orgId);
             })->scheduledFor(today())->where('status', 'pending')->count(),
             
-            'due_this_week' => Alert::whereHas('contract', function($q) use ($user) {
-                $q->where('user_id', $user->id);
+            'due_this_week' => Alert::whereHas('contract', function($q) use ($orgId) {
+                $q->where('org_id', $orgId);
             })->whereBetween('scheduled_for', [now()->startOfWeek(), now()->endOfWeek()])
                 ->where('status', 'pending')->count(),
             
-            'renewal_warnings' => Alert::whereHas('contract', function($q) use ($user) {
-                $q->where('user_id', $user->id);
+            'renewal_warnings' => Alert::whereHas('contract', function($q) use ($orgId) {
+                $q->where('org_id', $orgId);
             })->where('type', 'renewal_warning')->where('status', 'pending')->count(),
             
-            'notice_deadlines' => Alert::whereHas('contract', function($q) use ($user) {
-                $q->where('user_id', $user->id);
+            'notice_deadlines' => Alert::whereHas('contract', function($q) use ($orgId) {
+                $q->where('org_id', $orgId);
             })->where('type', 'notice_deadline')->where('status', 'pending')->count(),
         ];
 
         // Répartition par catégorie
         $categoryStats = Contract::select('category', DB::raw('count(*) as count'))
+            ->where('org_id', $orgId)
             ->groupBy('category')
             ->orderBy('count', 'desc')
             ->get()
@@ -98,10 +100,13 @@ class DashboardController extends Controller
      */
     public function upcomingRenewals(Request $request)
     {
+        $user = $request->user();
+        $orgId = $user->org_id;
         $days = $request->get('days', 90);
         $limit = $request->get('limit', 10);
 
-        $contracts = Contract::expiringSoon($days)
+        $contracts = Contract::where('org_id', $orgId)
+            ->expiringSoon($days)
             ->with(['alerts' => function($query) {
                 $query->where('status', 'pending')->orderBy('scheduled_for');
             }])
@@ -117,12 +122,15 @@ class DashboardController extends Controller
      */
     public function recentActivity(Request $request)
     {
+        $user = $request->user();
+        $orgId = $user->org_id;
         $limit = $request->get('limit', 20);
 
         $activities = collect();
 
         // Contrats récents
-        $recentContracts = Contract::with(['user:id,name'])
+        $recentContracts = Contract::where('org_id', $orgId)
+            ->with(['user:id,name'])
             ->orderBy('created_at', 'desc')
             ->limit(10)
             ->get()
@@ -141,8 +149,8 @@ class DashboardController extends Controller
             });
 
         // Alertes récentes
-        $recentAlerts = Alert::whereHas('contract', function($q) use ($request) {
-                $q->where('user_id', $request->user()->id);
+        $recentAlerts = Alert::whereHas('contract', function($q) use ($orgId) {
+                $q->where('org_id', $orgId);
             })
             ->with(['contract:id,title,type'])
             ->where('status', 'sent')
@@ -165,7 +173,8 @@ class DashboardController extends Controller
             });
 
         // OCR terminés récemment
-        $recentOcrCompleted = Contract::where('ocr_status', 'completed')
+        $recentOcrCompleted = Contract::where('org_id', $orgId)
+            ->where('ocr_status', 'completed')
             ->where('updated_at', '>=', now()->subDays(7))
             ->with(['user:id,name'])
             ->orderBy('updated_at', 'desc')
@@ -205,20 +214,25 @@ class DashboardController extends Controller
      */
     public function weeklySummary(Request $request)
     {
+        $user = $request->user();
+        $orgId = $user->org_id;
         $startOfWeek = now()->startOfWeek();
         $endOfWeek = now()->endOfWeek();
 
         $summary = [
-            'contracts_created' => Contract::whereBetween('created_at', [$startOfWeek, $endOfWeek])->count(),
-            'alerts_sent' => Alert::whereHas('contract', function($q) use ($request) {
-                $q->where('user_id', $request->user()->id);
+            'contracts_created' => Contract::where('org_id', $orgId)
+                ->whereBetween('created_at', [$startOfWeek, $endOfWeek])->count(),
+            'alerts_sent' => Alert::whereHas('contract', function($q) use ($orgId) {
+                $q->where('org_id', $orgId);
             })->whereBetween('sent_at', [$startOfWeek, $endOfWeek])->count(),
-            'ocr_processed' => Contract::where('ocr_status', 'completed')
+            'ocr_processed' => Contract::where('org_id', $orgId)
+                ->where('ocr_status', 'completed')
                 ->whereBetween('updated_at', [$startOfWeek, $endOfWeek])->count(),
-            'upcoming_renewals' => Contract::whereBetween('next_renewal_date', [
-                $endOfWeek, 
-                $endOfWeek->copy()->addDays(30)
-            ])->count(),
+            'upcoming_renewals' => Contract::where('org_id', $orgId)
+                ->whereBetween('next_renewal_date', [
+                    $endOfWeek, 
+                    $endOfWeek->copy()->addDays(30)
+                ])->count(),
         ];
 
         return response()->json($summary);

@@ -19,7 +19,9 @@ class Contract extends Model
         'file_original_name', 'amount_cents', 'currency',
         'start_date', 'end_date', 'notice_period_days',
         'is_tacit_renewal', 'next_renewal_date', 'status',
-        'ocr_status', 'ai_status', 'ocr_raw_text', 'ai_analysis', 'ocr_metadata'
+        'ocr_status', 'ai_status', 'ocr_raw_text', 'ai_analysis',
+        'ai_analysis_cached', 'ai_analysis_cached_at', 'processing_mode',
+        'pattern_analysis_result', 'tacit_renewal_detected_by_pattern', 'pattern_confidence_score',
     ];
 
     protected $casts = [
@@ -30,6 +32,10 @@ class Contract extends Model
         'amount_cents' => 'integer',
         'ai_analysis' => 'array',
         'ocr_metadata' => 'array',
+        'ai_analysis_cached' => 'array',
+        'ai_analysis_cached_at' => 'datetime',
+        'pattern_analysis_result' => 'array',
+        'tacit_renewal_detected_by_pattern' => 'boolean',
     ];
 
     // Relations
@@ -106,6 +112,11 @@ class Contract extends Model
             return false;
         }
 
+        // Si le contrat est déjà expiré, pas besoin d'alerte future
+        if ($this->next_renewal_date->isPast()) {
+            return true; // Pour créer l'alerte d'expiration
+        }
+
         $daysUntilRenewal = $this->next_renewal_date->diffInDays(now());
         return in_array($daysUntilRenewal, [90, 30, 7, 1]);
     }
@@ -116,10 +127,14 @@ class Contract extends Model
             return null;
         }
 
+        // Si le contrat est déjà expiré
+        if ($this->next_renewal_date->isPast()) {
+            return 'contract_expired';
+        }
+
         $daysUntilRenewal = $this->next_renewal_date->diffInDays(now());
         
         return match (true) {
-            $daysUntilRenewal <= 1 => 'contract_expired',
             $daysUntilRenewal <= 7 => 'notice_deadline',
             $daysUntilRenewal <= 90 => 'renewal_warning',
             default => null
@@ -132,7 +147,13 @@ class Contract extends Model
             return null;
         }
 
-        return max(0, $this->next_renewal_date->diffInDays(now()));
+        // Si le contrat est expiré, retourner 0
+        if ($this->next_renewal_date->isPast()) {
+            return 0;
+        }
+
+        // Pour les dates futures, utiliser now() comme référence
+        return (int) now()->diffInDays($this->next_renewal_date);
     }
 
     public function getStatusColor(): string
@@ -143,5 +164,89 @@ class Contract extends Model
             'cancelled' => 'gray',
             default => 'gray'
         };
+    }
+
+    // Gestion de l'analyse IA cachée
+    public function hasValidCachedAiAnalysis(): bool
+    {
+        return !empty($this->ai_analysis_cached) && 
+               $this->ai_analysis_cached_at && 
+               $this->ai_analysis_cached_at->isAfter(now()->subDays(30)); // Cache valide 30 jours
+    }
+
+    public function getCachedOrFreshAiAnalysis(): ?array
+    {
+        // Si on a une analyse cachée valide, la retourner
+        if ($this->hasValidCachedAiAnalysis()) {
+            return $this->ai_analysis_cached;
+        }
+
+        // Sinon retourner l'analyse temporaire (si elle existe)
+        return $this->ai_analysis;
+    }
+
+    public function cacheAiAnalysis(array $analysis): void
+    {
+        $this->update([
+            'ai_analysis_cached' => $analysis,
+            'ai_analysis_cached_at' => now(),
+            'ai_analysis' => $analysis, // Garder aussi dans l'ancien champ pour compatibilité
+        ]);
+    }
+
+    public function invalidateAiCache(): void
+    {
+        $this->update([
+            'ai_analysis_cached' => null,
+            'ai_analysis_cached_at' => null,
+            'ai_analysis' => null,
+        ]);
+    }
+
+    // Gestion du traitement pattern-only vs AI-enhanced
+    public function isPatternOnlyMode(): bool
+    {
+        return $this->processing_mode === 'pattern_only';
+    }
+
+    public function isAiEnhancedMode(): bool
+    {
+        return $this->processing_mode === 'ai_enhanced';
+    }
+
+    public function setProcessingMode(string $mode): void
+    {
+        $this->update(['processing_mode' => $mode]);
+    }
+
+    // Gestion des résultats de pattern matching
+    public function updatePatternAnalysis(array $patternResult, bool $tacitRenewalDetected, float $confidence): void
+    {
+        $this->update([
+            'pattern_analysis_result' => $patternResult,
+            'tacit_renewal_detected_by_pattern' => $tacitRenewalDetected,
+            'pattern_confidence_score' => $confidence,
+        ]);
+    }
+
+    public function getTacitRenewalInfo(): array
+    {
+        // Si on a une analyse IA cachée, l'utiliser en priorité
+        if ($this->hasValidCachedAiAnalysis() && !empty($this->ai_analysis_cached['reconduction_tacite'])) {
+            return [
+                'detected' => $this->ai_analysis_cached['reconduction_tacite'] ?? false,
+                'source' => 'ai_enhanced',
+                'confidence' => 0.9, // L'IA a généralement une haute confiance
+                'details' => $this->ai_analysis_cached
+            ];
+        }
+
+        // Sinon utiliser l'analyse par pattern matching
+        return [
+            'detected' => $this->tacit_renewal_detected_by_pattern,
+            'source' => 'pattern_only',
+            'confidence' => $this->pattern_confidence_score,
+            'details' => $this->pattern_analysis_result
+        ];
     }
 }

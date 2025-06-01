@@ -19,7 +19,7 @@ class AlertController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Alert::whereHas('contract', function($q) {
+        $query = Alert::whereHas('contract', function($q) use ($request) {
                 $q->where('user_id', $request->user()->id);
             })
             ->with(['contract:id,title,type,next_renewal_date'])

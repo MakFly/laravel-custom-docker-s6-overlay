@@ -45,15 +45,17 @@ export interface Contract {
     category: string;
     status: string;
     ocr_status: 'pending' | 'processing' | 'completed' | 'failed';
-    ai_status?: 'pending' | 'processing' | 'completed' | 'failed';
+    ai_status: 'pending' | 'processing' | 'completed' | 'failed';
     file_original_name: string;
-    amount_cents: number;
+    amount: number; // ContractResource utilise amount, pas amount_cents
     currency: string;
     start_date?: string;
     end_date?: string;
     next_renewal_date?: string;
     notice_period_days: number;
     is_tacit_renewal: boolean;
+    has_ocr_text: boolean; // Ajouté par ContractResource
+    has_ai_analysis: boolean; // Ajouté par ContractResource
     created_at: string;
     updated_at: string;
     alerts_count?: number;
@@ -74,9 +76,8 @@ const getOcrStatusIcon = (status: string) => {
     }
 };
 
-const formatAmount = (amountCents: number, currency: string = 'EUR') => {
-    if (amountCents <= 0) return '-';
-    const amount = amountCents / 100;
+const formatAmount = (amount: number, currency: string = 'EUR') => {
+    if (amount <= 0) return '-';
     return new Intl.NumberFormat('fr-FR', {
         style: 'currency',
         currency: currency,
@@ -97,7 +98,11 @@ const getDaysUntilRenewal = (renewalDate?: string) => {
     return diffDays;
 };
 
-export const columns: ColumnDef<Contract>[] = [
+interface ColumnsOptions {
+    onDelete?: (contractId: number) => void;
+}
+
+export const columns = (options: ColumnsOptions = {}): ColumnDef<Contract>[] => [
     {
         accessorKey: "title",
         header: "Contrat",
@@ -135,11 +140,11 @@ export const columns: ColumnDef<Contract>[] = [
         },
     },
     {
-        accessorKey: "amount_cents",
+        accessorKey: "amount",
         header: "Montant",
         cell: ({ row }) => {
             const contract = row.original;
-            return formatAmount(contract.amount_cents, contract.currency);
+            return formatAmount(contract.amount, contract.currency);
         },
     },
     {
@@ -172,8 +177,8 @@ export const columns: ColumnDef<Contract>[] = [
                     contractId={contract.id}
                     initialOcrStatus={contract.ocr_status}
                     initialAiStatus={contract.ai_status}
-                    hasOcrText={true}
-                    hasAiAnalysis={true}
+                    hasOcrText={contract.has_ocr_text}
+                    hasAiAnalysis={contract.has_ai_analysis}
                 />
             );
         },
@@ -201,7 +206,7 @@ export const columns: ColumnDef<Contract>[] = [
                             </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild>
-                            <Link href={route('contracts.edit', { contract: contract.id })} className="flex cursor-pointer">
+                            <Link href={`/contracts/${contract.id}/edit`} className="flex cursor-pointer">
                                 <Edit className="mr-2 h-4 w-4" />
                                 Modifier
                             </Link>
@@ -235,7 +240,7 @@ export const columns: ColumnDef<Contract>[] = [
                                     <AlertDialogCancel>Annuler</AlertDialogCancel>
                                     <AlertDialogAction
                                         onClick={() => {
-                                            router.delete(route('contracts.destroy', { contract: contract.id }));
+                                            options.onDelete?.(contract.id);
                                         }}
                                         className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
                                     >

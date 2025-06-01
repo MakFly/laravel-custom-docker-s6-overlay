@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useForm } from 'react-hook-form';
-import { CloudArrowUpIcon, DocumentTextIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { CloudArrowUp, FileText, X } from 'lucide-react';
 import { useUploadContract } from '../hooks/useContracts';
 import { toast } from 'react-hot-toast';
 
@@ -86,7 +86,7 @@ export function ContractUpload({ onSuccess, onCancel }: ContractUploadProps) {
             onClick={onCancel}
             className="text-gray-400 hover:text-gray-600"
           >
-            <XMarkIcon className="h-6 w-6" />
+            <X className="h-6 w-6" />
           </button>
         )}
       </div>
@@ -110,7 +110,7 @@ export function ContractUpload({ onSuccess, onCancel }: ContractUploadProps) {
               `}
             >
               <input {...getInputProps()} />
-              <CloudArrowUpIcon className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+              <CloudArrowUp className="mx-auto h-12 w-12 text-gray-400 mb-4" />
               <p className="text-lg font-medium text-gray-900 mb-2">
                 {isDragActive 
                   ? 'Déposez le fichier ici...' 
@@ -130,7 +130,7 @@ export function ContractUpload({ onSuccess, onCancel }: ContractUploadProps) {
           ) : (
             <div className="border border-gray-300 rounded-lg p-4 flex items-center justify-between">
               <div className="flex items-center space-x-3">
-                <DocumentTextIcon className="h-8 w-8 text-blue-500" />
+                <FileText className="h-8 w-8 text-blue-500" />
                 <div>
                   <p className="font-medium text-gray-900">{uploadedFile.name}</p>
                   <p className="text-sm text-gray-500">
@@ -143,7 +143,7 @@ export function ContractUpload({ onSuccess, onCancel }: ContractUploadProps) {
                 onClick={removeFile}
                 className="text-red-500 hover:text-red-700"
               >
-                <XMarkIcon className="h-5 w-5" />
+                <X className="h-5 w-5" />
               </button>
             </div>
           )}

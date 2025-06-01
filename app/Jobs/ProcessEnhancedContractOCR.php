@@ -22,7 +22,8 @@ class ProcessEnhancedContractOCR implements ShouldQueue
     public $timeout = 600; // 10 minutes pour le traitement avancé
 
     public function __construct(
-        public Contract $contract
+        public Contract $contract,
+        public bool $triggerAiAfterOcr = false // Par défaut, ne plus lancer l'IA automatiquement
     ) {}
 
     public function handle(EnhancedOCRService $enhancedOcr, ContractPatternService $patternService): void
@@ -40,6 +41,9 @@ class ProcessEnhancedContractOCR implements ShouldQueue
                 'ocr_raw_text' => null,
                 'ai_analysis' => null
             ]);
+
+            // Délai minimal pour permettre à l'UI de montrer la progress bar
+            sleep(2);
 
             // Étape 1: OCR optimisé avec scoring de confiance
             $ocrResult = $enhancedOcr->extractTextWithConfidence($this->contract->file_path);
@@ -66,6 +70,13 @@ class ProcessEnhancedContractOCR implements ShouldQueue
             
             // Étape 4: Mise à jour du contrat avec les données extraites
             $this->updateContractFromAnalysis($consolidatedData);
+            
+            // Étape 4b: Stocker les résultats du pattern matching
+            $this->contract->updatePatternAnalysis(
+                $patternAnalysis,
+                $patternAnalysis['tacit_renewal_detected'],
+                $patternAnalysis['confidence_score']
+            );
 
             // Étape 5: Marquer comme terminé avec succès
             $this->contract->update([
@@ -86,15 +97,19 @@ class ProcessEnhancedContractOCR implements ShouldQueue
 
             DB::commit();
 
-            // Déclencher l'analyse IA si le texte OCR est de qualité suffisante
-            if ($ocrResult['confidence'] >= 60) {
+            // Déclencher l'analyse IA si demandé et si le texte OCR est de qualité suffisante
+            if ($this->triggerAiAfterOcr && $ocrResult['confidence'] >= 60) {
                 Log::info("Triggering AI analysis", ['contract_id' => $this->contract->id]);
                 AnalyzeContractWithAI::dispatch($this->contract);
             } else {
-                Log::warning("OCR confidence too low for AI analysis", [
-                    'contract_id' => $this->contract->id,
-                    'confidence' => $ocrResult['confidence']
-                ]);
+                if (!$this->triggerAiAfterOcr) {
+                    Log::info("AI analysis skipped (manual OCR reprocess)", ['contract_id' => $this->contract->id]);
+                } else {
+                    Log::warning("OCR confidence too low for AI analysis", [
+                        'contract_id' => $this->contract->id,
+                        'confidence' => $ocrResult['confidence']
+                    ]);
+                }
             }
 
         } catch (\Exception $e) {
@@ -108,6 +123,7 @@ class ProcessEnhancedContractOCR implements ShouldQueue
             
             $this->contract->update([
                 'ocr_status' => 'failed',
+                'ai_status' => 'failed', // Annuler l'analyse IA si OCR échoue
                 'ocr_metadata' => [
                     'error' => $e->getMessage(),
                     'failed_at' => now()->toISOString()
@@ -307,6 +323,7 @@ class ProcessEnhancedContractOCR implements ShouldQueue
         
         $this->contract->update([
             'ocr_status' => 'failed',
+            'ai_status' => 'failed', // Annuler l'analyse IA si OCR échoue
             'ocr_metadata' => [
                 'error' => $exception->getMessage(),
                 'failed_permanently_at' => now()->toISOString(),

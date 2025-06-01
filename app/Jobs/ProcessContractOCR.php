@@ -51,7 +51,11 @@ class ProcessContractOCR implements ShouldQueue
                 'error' => $e->getMessage()
             ]);
             
-            $this->contract->update(['ocr_status' => 'failed']);
+            // Marquer OCR et AI comme échoués si OCR échoue
+            $this->contract->update([
+                'ocr_status' => 'failed',
+                'ai_status' => 'failed' // Annuler l'analyse IA si OCR échoue
+            ]);
             throw $e;
         }
     }
@@ -63,6 +67,10 @@ class ProcessContractOCR implements ShouldQueue
             'error' => $exception->getMessage()
         ]);
         
-        $this->contract->update(['ocr_status' => 'failed']);
+        // Marquer OCR et AI comme échoués en cas d'échec permanent
+        $this->contract->update([
+            'ocr_status' => 'failed',
+            'ai_status' => 'failed'
+        ]);
     }
 }

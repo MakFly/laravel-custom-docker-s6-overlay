@@ -46,21 +46,6 @@ const getStatusText = (status: string) => {
   }
 };
 
-const getStatusVariant = (status: string) => {
-  switch (status) {
-    case 'completed':
-      return 'default';
-    case 'failed':
-      return 'destructive';
-    case 'processing':
-      return 'secondary';
-    case 'pending':
-      return 'outline';
-    default:
-      return 'outline';
-  }
-};
-
 export function ContractStatusCell({
   contractId,
   initialOcrStatus,
@@ -82,7 +67,10 @@ export function ContractStatusCell({
     stopPollingWhen: (status) => {
       const ocrDone = ['completed', 'failed'].includes(status.ocr_status);
       const aiDone = !status.ai_status || ['completed', 'failed'].includes(status.ai_status);
-      return ocrDone && aiDone;
+      
+      // Arrêter le polling si OCR échoue ou si tout est terminé
+      const hasFailure = status.ocr_status === 'failed' || status.ai_status === 'failed';
+      return hasFailure || (ocrDone && aiDone);
     }
   });
 

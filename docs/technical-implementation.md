@@ -543,11 +543,6 @@ export function useReprocessContract() {
 import React from 'react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { 
-  ExclamationTriangleIcon,
-  ClockIcon,
-  DocumentTextIcon 
-} from '@heroicons/react/24/outline';
 import type { Contract } from '../types/contract';
 
 interface ContractCardProps {

@@ -15,6 +15,7 @@ use Illuminate\Http\JsonResponse;
 use Spatie\QueryBuilder\AllowedFilter;
 use Spatie\QueryBuilder\QueryBuilder;
 use Illuminate\Support\Facades\Storage;
+use App\Jobs\CreateContractAlerts;
 
 class ContractController extends Controller
 {
@@ -73,20 +74,68 @@ class ContractController extends Controller
             'notice_period_days' => $request->notice_period_days ?? 30,
         ]);
 
-        // Lancer le traitement OCR optimisé en arrière-plan
-        ProcessEnhancedContractOCR::dispatch($contract);
+        // Lancer le traitement OCR optimisé en arrière-plan (mode pattern-only par défaut)
+        ProcessEnhancedContractOCR::dispatch($contract, false);
 
         return new ContractResource($contract);
     }
 
     /**
-     * Afficher un contrat spécifique
+     * Afficher un contrat spécifique avec analyse complète
      */
     public function show(Contract $contract)
     {
         $this->authorize('view', $contract);
-        
-        return new ContractResource($contract->load(['alerts', 'clauses', 'user:id,name,email']));
+        $user = request()->user();
+
+        // Charger les relations de base
+        $contract->load(['alerts', 'clauses', 'user:id,name,email']);
+
+        // Obtenir l'analyse complète (pattern + IA)
+        $tacitRenewalInfo = $contract->getTacitRenewalInfo();
+        $aiAnalysis = $contract->getCachedOrFreshAiAnalysis();
+
+        // Utiliser ContractResource pour les données de base
+        $contractResource = new ContractResource($contract);
+        $contractData = $contractResource->toArray(request());
+
+        // Enrichir avec les données d'analyse complète
+        $contractData['analysis'] = [
+            // Informations générales
+            'processing_mode' => $contract->processing_mode,
+            'has_ai_analysis' => !empty($aiAnalysis),
+            'has_cached_ai_analysis' => $contract->hasValidCachedAiAnalysis(),
+            'ai_analysis_cached_at' => $contract->ai_analysis_cached_at,
+            
+            // Analyse de tacite reconduction
+            'tacit_renewal' => [
+                'detected' => $tacitRenewalInfo['detected'],
+                'source' => $tacitRenewalInfo['source'], // 'pattern_only' ou 'ai_enhanced'
+                'confidence' => $tacitRenewalInfo['confidence'],
+                'details' => $tacitRenewalInfo['details']
+            ],
+            
+            // Résultats du pattern matching (toujours disponible)
+            'pattern_analysis' => [
+                'result' => $contract->pattern_analysis_result,
+                'confidence_score' => $contract->pattern_confidence_score,
+                'detected_tacit_renewal' => $contract->tacit_renewal_detected_by_pattern,
+                'is_reliable' => $contract->pattern_confidence_score >= 0.7
+            ],
+            
+            // Analyse IA complète (si disponible)
+            'ai_analysis' => $aiAnalysis,
+            
+            // Métadonnées OCR
+            'ocr_metadata' => $contract->ocr_metadata,
+            'has_ocr_text' => !empty($contract->ocr_raw_text),
+        ];
+
+        // Informations utilisateur pour les crédits
+        $contractData['user_credits'] = $user->getAiCreditsInfo();
+        $contractData['can_use_ai'] = $user->hasAiCredits();
+
+        return response()->json($contractData);
     }
 
     /**
@@ -150,7 +199,7 @@ class ContractController extends Controller
             'ocr_metadata' => null,
         ]);
 
-        ProcessEnhancedContractOCR::dispatch($contract);
+        ProcessEnhancedContractOCR::dispatch($contract, false);
 
         return response()->json(['message' => 'Retraitement OCR optimisé en cours']);
     }
@@ -227,58 +276,230 @@ class ContractController extends Controller
     }
 
     /**
-     * Obtenir l'analyse IA
+     * Obtenir l'analyse complète du contrat (pattern + IA)
      */
     public function getAnalysis(Contract $contract)
     {
         $this->authorize('view', $contract);
+        $user = request()->user();
 
+        // Informations sur la tacite reconduction
+        $tacitRenewalInfo = $contract->getTacitRenewalInfo();
+
+        // Analyse IA (cachée ou temporaire)
+        $aiAnalysis = $contract->getCachedOrFreshAiAnalysis();
+        
         return response()->json([
-            'ai_analysis' => $contract->ai_analysis,
-            'has_analysis' => !empty($contract->ai_analysis),
-            'is_tacit_renewal' => $contract->is_tacit_renewal,
-            'next_renewal_date' => $contract->next_renewal_date,
+            // Informations générales
+            'processing_mode' => $contract->processing_mode,
+            'has_ai_analysis' => !empty($aiAnalysis),
+            'has_cached_ai_analysis' => $contract->hasValidCachedAiAnalysis(),
+            'ai_analysis_cached_at' => $contract->ai_analysis_cached_at,
+            
+            // Analyse de tacite reconduction
+            'tacit_renewal' => [
+                'detected' => $tacitRenewalInfo['detected'],
+                'source' => $tacitRenewalInfo['source'], // 'pattern_only' ou 'ai_enhanced'
+                'confidence' => $tacitRenewalInfo['confidence'],
+                'details' => $tacitRenewalInfo['details']
+            ],
+            
+            // Résultats du pattern matching (toujours disponible)
+            'pattern_analysis' => [
+                'result' => $contract->pattern_analysis_result,
+                'confidence_score' => $contract->pattern_confidence_score,
+                'detected_tacit_renewal' => $contract->tacit_renewal_detected_by_pattern,
+                'is_reliable' => $contract->pattern_confidence_score >= 0.7
+            ],
+            
+            // Analyse IA complète (si disponible)
+            'ai_analysis' => $aiAnalysis,
+            
+            // Métadonnées OCR
+            'ocr_metadata' => $contract->ocr_metadata,
+            'ocr_status' => $contract->ocr_status,
+            'has_ocr_text' => !empty($contract->ocr_raw_text),
+            
+            // Informations utilisateur pour les crédits
+            'user_credits' => $user->getAiCreditsInfo(),
+            'can_use_ai' => $user->hasAiCredits(),
+            
+            // Données du contrat
+            'contract' => [
+                'id' => $contract->id,
+                'title' => $contract->title,
+                'is_tacit_renewal' => $contract->is_tacit_renewal,
+                'next_renewal_date' => $contract->next_renewal_date,
+                'notice_period_days' => $contract->notice_period_days,
+                'amount' => $contract->amount,
+                'status' => $contract->status,
+            ]
         ]);
     }
 
     /**
-     * Forcer une nouvelle analyse IA
+     * Forcer une nouvelle analyse IA (avec gestion des crédits)
      */
     public function reanalyze(Contract $contract, OpenAIService $aiService)
     {
         $this->authorize('update', $contract);
+        $user = request()->user();
 
         if (!$contract->ocr_raw_text) {
             return response()->json(['error' => 'Aucun texte OCR disponible'], 400);
         }
 
+        // Vérifier si l'utilisateur a déjà une analyse IA cachée
+        if ($contract->hasValidCachedAiAnalysis()) {
+            return response()->json([
+                'has_cached_analysis' => true,
+                'cached_analysis' => $contract->ai_analysis_cached,
+                'cached_at' => $contract->ai_analysis_cached_at,
+                'message' => 'Une analyse IA récente existe déjà. Voulez-vous la remplacer ?',
+                'user_credits' => $user->getAiCreditsInfo(),
+            ]);
+        }
+
+        // Vérifier les crédits IA
+        if (!$user->hasAiCredits()) {
+            return response()->json([
+                'error' => 'Crédits IA insuffisants',
+                'user_credits' => $user->getAiCreditsInfo(),
+                'upgrade_needed' => true
+            ], 402); // Payment Required
+        }
+
         try {
+            // Consommer un crédit IA
+            if (!$user->consumeAiCredit()) {
+                return response()->json([
+                    'error' => 'Impossible de consommer le crédit IA',
+                    'user_credits' => $user->getAiCreditsInfo(),
+                ], 402);
+            }
+
             $analysis = $aiService->analyzeContract($contract->ocr_raw_text);
             
-            $contract->update([
-                'ai_analysis' => $analysis,
+            // Cacher l'analyse IA pour éviter les appels futurs
+            $contract->cacheAiAnalysis($analysis);
+            $contract->setProcessingMode('ai_enhanced');
+            
+            // Mettre à jour les champs du contrat
+            $updateData = [
                 'is_tacit_renewal' => $analysis['reconduction_tacite'] ?? false,
-                'amount_cents' => isset($analysis['montant']) ? ($analysis['montant'] * 100) : $contract->amount_cents,
                 'notice_period_days' => $analysis['preavis_resiliation_jours'] ?? $contract->notice_period_days,
-            ]);
+            ];
+
+            if (isset($analysis['montant'])) {
+                $updateData['amount_cents'] = $analysis['montant'] * 100;
+            }
 
             // Mettre à jour les dates si disponibles
             if (!empty($analysis['date_debut'])) {
-                $contract->start_date = $analysis['date_debut'];
+                $updateData['start_date'] = $analysis['date_debut'];
             }
             if (!empty($analysis['date_fin'])) {
-                $contract->end_date = $analysis['date_fin'];
-                $contract->next_renewal_date = $analysis['date_fin'];
+                $updateData['end_date'] = $analysis['date_fin'];
+                $updateData['next_renewal_date'] = $analysis['date_fin'];
             }
             
-            $contract->save();
+            $contract->update($updateData);
+
+            // Créer les alertes basées sur la nouvelle analyse
+            CreateContractAlerts::dispatch($contract);
 
             return response()->json([
-                'message' => 'Analyse IA mise à jour',
+                'message' => 'Analyse IA mise à jour et sauvegardée',
                 'analysis' => $analysis,
+                'credit_consumed' => true,
+                'user_credits' => $user->fresh()->getAiCreditsInfo(),
             ]);
 
         } catch (\Exception $e) {
+            // En cas d'erreur, rembourser le crédit
+            $user->increment('ai_credits_remaining');
+            $user->decrement('ai_credits_used_this_month');
+            $user->decrement('ai_credits_total_used');
+            
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Forcer une nouvelle analyse IA en remplaçant l'existante
+     */
+    public function forceReanalyze(Contract $contract, OpenAIService $aiService)
+    {
+        $this->authorize('update', $contract);
+        $user = request()->user();
+
+        if (!$contract->ocr_raw_text) {
+            return response()->json(['error' => 'Aucun texte OCR disponible'], 400);
+        }
+
+        // Vérifier les crédits IA
+        if (!$user->hasAiCredits()) {
+            return response()->json([
+                'error' => 'Crédits IA insuffisants',
+                'user_credits' => $user->getAiCreditsInfo(),
+                'upgrade_needed' => true
+            ], 402);
+        }
+
+        try {
+            // Consommer un crédit IA
+            if (!$user->consumeAiCredit()) {
+                return response()->json([
+                    'error' => 'Impossible de consommer le crédit IA',
+                    'user_credits' => $user->getAiCreditsInfo(),
+                ], 402);
+            }
+
+            // Invalider l'ancien cache
+            $contract->invalidateAiCache();
+
+            $analysis = $aiService->analyzeContract($contract->ocr_raw_text);
+            
+            // Cacher la nouvelle analyse IA
+            $contract->cacheAiAnalysis($analysis);
+            $contract->setProcessingMode('ai_enhanced');
+            
+            // Mettre à jour les champs du contrat
+            $updateData = [
+                'is_tacit_renewal' => $analysis['reconduction_tacite'] ?? false,
+                'notice_period_days' => $analysis['preavis_resiliation_jours'] ?? $contract->notice_period_days,
+            ];
+
+            if (isset($analysis['montant'])) {
+                $updateData['amount_cents'] = $analysis['montant'] * 100;
+            }
+
+            if (!empty($analysis['date_debut'])) {
+                $updateData['start_date'] = $analysis['date_debut'];
+            }
+            if (!empty($analysis['date_fin'])) {
+                $updateData['end_date'] = $analysis['date_fin'];
+                $updateData['next_renewal_date'] = $analysis['date_fin'];
+            }
+            
+            $contract->update($updateData);
+
+            // Créer les alertes basées sur la nouvelle analyse
+            CreateContractAlerts::dispatch($contract);
+
+            return response()->json([
+                'message' => 'Nouvelle analyse IA effectuée et sauvegardée',
+                'analysis' => $analysis,
+                'credit_consumed' => true,
+                'user_credits' => $user->fresh()->getAiCreditsInfo(),
+            ]);
+
+        } catch (\Exception $e) {
+            // En cas d'erreur, rembourser le crédit
+            $user->increment('ai_credits_remaining');
+            $user->decrement('ai_credits_used_this_month');
+            $user->decrement('ai_credits_total_used');
+            
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
@@ -294,12 +515,61 @@ class ContractController extends Controller
             return response()->json(['error' => 'Fichier non trouvé'], 404);
         }
 
-        $filePath = Storage::disk('private')->path($contract->file_path);
+        // Récupérer le contenu du fichier depuis MinIO/S3
+        $fileContent = Storage::disk('private')->get($contract->file_path);
+        $fileSize = Storage::disk('private')->size($contract->file_path);
         
-        return response()->download(
-            $filePath,
-            $contract->file_original_name
-        );
+        // Déterminer le type MIME basé sur l'extension
+        $extension = strtolower(pathinfo($contract->file_original_name, PATHINFO_EXTENSION));
+        $mimeType = match($extension) {
+            'pdf' => 'application/pdf',
+            'jpg', 'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'doc' => 'application/msword',
+            'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            default => 'application/octet-stream'
+        };
+        
+        return response($fileContent, 200, [
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => 'attachment; filename="' . $contract->file_original_name . '"',
+            'Content-Length' => $fileSize,
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
+        ]);
+    }
+
+    /**
+     * Afficher le fichier PDF en inline pour visualisation
+     */
+    public function view(Contract $contract)
+    {
+        $this->authorize('view', $contract);
+
+        if (!Storage::disk('private')->exists($contract->file_path)) {
+            return response()->json(['error' => 'Fichier non trouvé'], 404);
+        }
+
+        // Récupérer le contenu du fichier depuis MinIO/S3
+        $fileContent = Storage::disk('private')->get($contract->file_path);
+        
+        // Déterminer le type MIME basé sur l'extension
+        $extension = strtolower(pathinfo($contract->file_original_name, PATHINFO_EXTENSION));
+        $mimeType = match($extension) {
+            'pdf' => 'application/pdf',
+            'jpg', 'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            default => 'application/octet-stream'
+        };
+        
+        return response($fileContent, 200, [
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => 'inline; filename="' . $contract->file_original_name . '"',
+            'Content-Length' => strlen($fileContent),
+            'Cache-Control' => 'public, max-age=3600',
+            'Accept-Ranges' => 'bytes',
+        ]);
     }
 
     /**

@@ -70,6 +70,25 @@ export function ProcessingStatus({
     }
   };
 
+  // Déterminer le vrai statut AI en fonction du contexte
+  const getEffectiveAiStatus = () => {
+    // Maintenant aiStatus devrait toujours être défini grâce à ContractResource
+    // Mais on garde la logique de fallback au cas oùma
+    if (!aiStatus) {
+      if (ocrStatus === 'failed') {
+        return 'failed';
+      } else if (ocrStatus === 'completed' && !hasAiAnalysis) {
+        return 'pending';
+      } else if (ocrStatus === 'processing' || ocrStatus === 'pending') {
+        return 'pending'; // Afficher pending même si OCR en cours
+      }
+      return 'pending';
+    }
+    return aiStatus;
+  };
+
+  const effectiveAiStatus = getEffectiveAiStatus();
+
   return (
     <Card className={cn("", className)}>
       <CardContent className="p-4">
@@ -99,27 +118,25 @@ export function ProcessingStatus({
               </div>
             </div>
 
-            {/* AI Analysis Status */}
-            {aiStatus && (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Brain className="h-4 w-4 text-gray-500" />
-                  <span className="text-sm text-gray-700">Analyse IA</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  {getStatusIcon(aiStatus, aiStatus === 'processing')}
-                  <Badge variant={getStatusVariant(aiStatus)} className="text-xs">
-                    {getStatusText(aiStatus)}
-                  </Badge>
-                </div>
+            {/* AI Analysis Status - Toujours afficher maintenant */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Brain className="h-4 w-4 text-gray-500" />
+                <span className="text-sm text-gray-700">Analyse IA</span>
               </div>
-            )}
+              <div className="flex items-center space-x-2">
+                {getStatusIcon(effectiveAiStatus, effectiveAiStatus === 'processing')}
+                <Badge variant={getStatusVariant(effectiveAiStatus)} className="text-xs">
+                  {getStatusText(effectiveAiStatus)}
+                </Badge>
+              </div>
+            </div>
 
             {/* Progress Summary */}
             <div className="pt-2 border-t border-gray-100">
               <div className="flex justify-between text-xs text-gray-500">
                 <span>Texte extrait: {hasOcrText ? 'Oui' : 'Non'}</span>
-                <span>Analyse IA: {hasAiAnalysis ? 'Disponible' : 'Non disponible'}</span>
+                <span>Analyse IA: {hasAiAnalysis ? 'Disponible' : (effectiveAiStatus ? 'En cours' : 'Non disponible')}</span>
               </div>
             </div>
           </div>

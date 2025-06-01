@@ -25,6 +25,16 @@ class AnalyzeContractWithAI implements ShouldQueue
 
     public function handle(OpenAIService $aiService): void
     {
+        // Vérifier que l'OCR a réussi avant de commencer l'analyse IA
+        if ($this->contract->ocr_status !== 'completed') {
+            Log::warning("OCR not completed, cannot start AI analysis", [
+                'contract_id' => $this->contract->id,
+                'ocr_status' => $this->contract->ocr_status
+            ]);
+            $this->contract->update(['ai_status' => 'failed']);
+            return;
+        }
+
         if (!$this->contract->ocr_raw_text) {
             Log::warning("No OCR text available for AI analysis", [
                 'contract_id' => $this->contract->id

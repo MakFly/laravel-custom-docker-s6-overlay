@@ -136,7 +136,7 @@ export default function Create() {
             });
             
             // Rediriger vers la page de détail pour suivre le traitement en temps réel
-            router.visit(route('contracts.show', { contract: result.id }));
+            router.visit(route('contracts.show', { contract: result.data.id }));
             
         } catch (error: any) {
             console.error('Erreur lors de la création:', error);

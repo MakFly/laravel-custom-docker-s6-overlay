@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Models\Contract;
 use App\Http\Requests\StoreContractRequest;
+use App\Http\Resources\ContractResource;
 use App\Jobs\ProcessContractOCR;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -58,7 +59,15 @@ class ContractController extends Controller
         ];
 
         return Inertia::render('Contracts/Index', [
-            'contracts' => $contracts,
+            'contracts' => [
+                'data' => ContractResource::collection($contracts->items()),
+                'total' => $contracts->total(),
+                'per_page' => $contracts->perPage(),
+                'current_page' => $contracts->currentPage(),
+                'last_page' => $contracts->lastPage(),
+                'from' => $contracts->firstItem(),
+                'to' => $contracts->lastItem(),
+            ],
             'stats' => $stats,
             'filters' => $request->only(['type', 'category', 'status']),
         ]);
@@ -93,6 +102,7 @@ class ContractController extends Controller
             'file_original_name' => $file->getClientOriginalName(),
             'status' => 'active',
             'ocr_status' => 'pending',
+            'ai_status' => 'pending',
             'amount_cents' => $request->amount ? ($request->amount * 100) : 0,
             'notice_period_days' => $request->notice_period_days ?? 30,
         ]);
@@ -122,7 +132,7 @@ class ContractController extends Controller
         $this->authorize('view', $contract);
 
         return Inertia::render('Contracts/Show', [
-            'contract' => $contract->load(['alerts', 'clauses', 'user:id,name,email']),
+            'contract' => new ContractResource($contract->load(['alerts', 'clauses', 'user:id,name,email'])),
         ]);
     }
 
@@ -134,7 +144,7 @@ class ContractController extends Controller
         $this->authorize('update', $contract);
 
         return Inertia::render('Contracts/Edit', [
-            'contract' => $contract,
+            'contract' => new ContractResource($contract->load(['user:id,name,email'])),
         ]);
     }
 
@@ -208,14 +218,13 @@ class ContractController extends Controller
     }
 
     /**
-     * Page d'analyse IA
+     * Page d'analyse IA - Redirection vers la page show unifiée
      */
     public function analysis(Contract $contract)
     {
         $this->authorize('view', $contract);
 
-        return Inertia::render('Contracts/Analysis', [
-            'contract' => $contract,
-        ]);
+        // Rediriger vers la page show qui contient maintenant l'analyse complète
+        return redirect()->route('contracts.show', $contract);
     }
 }

@@ -1,4 +1,5 @@
 import type { Contract, ContractFilters } from '../types/contract';
+import { normalizeToContractUnified, type ContractUnified } from '../types/contract-unified';
 
 // Helper function for making authenticated requests
 async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
@@ -51,9 +52,12 @@ export const contractApi = {
     return response.json();
   },
 
-  async getById(id: number) {
+  async getById(id: number): Promise<ContractUnified> {
     const response = await fetchWithAuth(`/contracts/${id}`);
-    return response.json();
+    const apiData = await response.json();
+    // Si la réponse a une structure { data: {...} }, extraire .data
+    const contractData = apiData.data || apiData;
+    return normalizeToContractUnified(contractData);
   },
 
   async upload(data: FormData) {
@@ -108,9 +112,36 @@ export const contractApi = {
     return response.json();
   },
 
+  async getAnalysis(id: number) {
+    const response = await fetchWithAuth(`/contracts/${id}/analysis`);
+    return response.json();
+  },
+
+  async reanalyze(id: number) {
+    const response = await fetchWithAuth(`/contracts/${id}/reanalyze`, {
+      method: 'POST',
+    });
+    return response.json();
+  },
+
+  async forceReanalyze(id: number) {
+    const response = await fetchWithAuth(`/contracts/${id}/force-reanalyze`, {
+      method: 'POST',
+    });
+    return response.json();
+  },
+
   async getDashboardStats() {
     const response = await fetchWithAuth('/dashboard/stats');
-    return response.json();
+    const data = await response.json();
+    
+    // Transformer les données pour correspondre au format attendu par le frontend
+    return {
+      total_contracts: data.contracts?.total || 0,
+      active_contracts: data.contracts?.active || 0,
+      expiring_soon: data.contracts?.expiring_soon || 0,
+      processed_contracts: (data.contracts?.total || 0) - (data.contracts?.pending_ocr || 0),
+    };
   },
 
   async getUpcomingRenewals() {

@@ -177,6 +177,7 @@ Contrat à analyser :
             
             return !empty($response->choices);
         } catch (\Exception $e) {
+            Log::error('OpenAI test connection failed', ['error' => $e->getMessage()]);
             return false;
         }
     }

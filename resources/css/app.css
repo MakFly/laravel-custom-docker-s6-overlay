@@ -157,3 +157,6 @@
         @apply bg-background text-foreground;
     }
 }
+
+/* Import des styles PDF Viewer */
+@import './pdf-viewer.css';

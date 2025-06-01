@@ -21,7 +21,8 @@ class AlertResource extends JsonResource
             'status' => $this->status,
             'status_label' => $this->getStatusLabel(),
             'notification_method' => $this->notification_method,
-            'message' => $this->message,
+            'message' => $this->getDynamicMessage(),
+            'original_message' => $this->message,
             
             // Dates
             'scheduled_for' => $this->scheduled_for->format('Y-m-d H:i:s'),

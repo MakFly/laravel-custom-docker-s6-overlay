@@ -32,6 +32,13 @@ class CreateContractAlerts implements ShouldQueue
             return;
         }
 
+        // Nettoyer les alertes existantes pour éviter les doublons lors du retraitement
+        Alert::where('contract_id', $this->contract->id)->delete();
+        
+        Log::info("Cleaned existing alerts for contract before creating new ones", [
+            'contract_id' => $this->contract->id
+        ]);
+
         $renewalDate = Carbon::parse($this->contract->next_renewal_date);
         $now = now();
 
@@ -75,8 +82,13 @@ class CreateContractAlerts implements ShouldQueue
         foreach ($alertsToCreate as $alertData) {
             $scheduledFor = $renewalDate->copy()->subDays($alertData['days_before']);
             
-            // Ne pas créer d'alertes pour des dates passées
-            if ($scheduledFor->isPast()) {
+            // Pour les alertes d'expiration, ne les créer que si c'est pour aujourd'hui ou plus tard
+            if ($alertData['type'] === 'contract_expired' && !$renewalDate->isToday() && !$renewalDate->isPast()) {
+                continue;
+            }
+            
+            // Ne pas créer d'alertes pour des dates passées (sauf expiration le jour même)
+            if ($scheduledFor->isPast() && !($alertData['type'] === 'contract_expired' && $renewalDate->isToday())) {
                 continue;
             }
 
@@ -103,6 +115,14 @@ class CreateContractAlerts implements ShouldQueue
                 ]);
             }
         }
+
+        // Nettoyer les alertes incorrectes : supprimer les alertes "contract_expired" 
+        // pour des contrats qui n'ont pas encore expiré
+        Alert::where('contract_id', $this->contract->id)
+            ->where('type', 'contract_expired')
+            ->where('status', 'pending')
+            ->whereDate('scheduled_for', '>', $renewalDate->toDateString())
+            ->delete();
 
         // Marquer les anciennes alertes comme obsolètes si la date de renouvellement a changé
         Alert::where('contract_id', $this->contract->id)

@@ -78,6 +78,7 @@ dev: ## Démarrer tous les conteneurs Docker
 	$(DOCKER_COMPOSE) up -d
 	@echo "$(GREEN)✅ Services démarrés:$(RESET)"
 	@echo "   🌐 Application: $(BOLD)http://localhost:8000$(RESET)"
+	@echo "   🌐 Horizon: $(BOLD)http://localhost:8000/horizon$(RESET)"
 	@echo "   🛢️ Adminer DB: $(BOLD)http://localhost:9080$(RESET)"
 	@echo "   📦 Minio S3:   $(BOLD)http://localhost:9001$(RESET)"
 	@echo "   📋 Logs:       $(BOLD)http://localhost:8888$(RESET)"

@@ -1,0 +1,45 @@
+/* Styles pour react-pdf */
+.react-pdf__Page {
+    position: relative;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    background: white;
+}
+
+.react-pdf__Page__textContent {
+    display: none; /* On désactive le text layer pour les performances */
+}
+
+.react-pdf__Page__annotations {
+    display: none; /* On désactive les annotations pour les performances */
+}
+
+.react-pdf__Page__canvas {
+    max-width: 100%;
+    height: auto;
+    display: block;
+}
+
+.react-pdf__Document {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.react-pdf__message {
+    padding: 1rem;
+    color: #6b7280;
+    text-align: center;
+}
+
+.react-pdf__message--loading {
+    color: #3b82f6;
+}
+
+.react-pdf__message--error {
+    color: #ef4444;
+}
+
+.react-pdf__message--no-data {
+    color: #6b7280;
+} 

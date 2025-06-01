@@ -2,12 +2,12 @@ import React from 'react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { 
-  ExclamationTriangleIcon,
-  ClockIcon,
-  DocumentTextIcon,
-  CheckCircleIcon,
-  XCircleIcon
-} from '@heroicons/react/24/outline';
+  AlertTriangle,
+  Clock,
+  FileText,
+  CheckCircle,
+  XCircle
+} from 'lucide-react';
 import type { Contract } from '../types/contract';
 
 interface ContractCardProps {
@@ -37,13 +37,13 @@ export function ContractCard({ contract, onClick }: ContractCardProps) {
   const getOcrStatusIcon = (status: Contract['ocr_status']) => {
     switch (status) {
       case 'completed':
-        return <CheckCircleIcon className="h-5 w-5 text-green-500" />;
+        return <CheckCircle className="h-5 w-5 text-green-500" />;
       case 'processing':
-        return <ClockIcon className="h-5 w-5 text-yellow-500 animate-spin" />;
+        return <Clock className="h-5 w-5 text-yellow-500 animate-spin" />;
       case 'failed':
-        return <XCircleIcon className="h-5 w-5 text-red-500" />;
+        return <XCircle className="h-5 w-5 text-red-500" />;
       default:
-        return <ClockIcon className="h-5 w-5 text-gray-400" />;
+        return <Clock className="h-5 w-5 text-gray-400" />;
     }
   };
 
@@ -123,7 +123,7 @@ export function ContractCard({ contract, onClick }: ContractCardProps) {
         <div className={`flex items-center space-x-2 mb-3 ${
           contract.is_expiring ? 'text-red-600' : 'text-gray-600'
         }`}>
-          {contract.is_expiring && <ExclamationTriangleIcon className="h-4 w-4" />}
+          {contract.is_expiring && <AlertTriangle className="h-4 w-4" />}
           <span className="text-sm font-medium">
             Renouvellement: {format(new Date(contract.next_renewal_date), 'dd MMMM yyyy', { locale: fr })}
           </span>
@@ -134,7 +134,7 @@ export function ContractCard({ contract, onClick }: ContractCardProps) {
       <div className="flex flex-wrap gap-2 mt-4">
         {contract.alerts_count > 0 && (
           <div className="flex items-center space-x-1 text-orange-600 bg-orange-50 px-2 py-1 rounded text-xs">
-            <ExclamationTriangleIcon className="h-3 w-3" />
+            <AlertTriangle className="h-3 w-3" />
             <span className="font-medium">
               {contract.alerts_count} alerte{contract.alerts_count > 1 ? 's' : ''}
             </span>
