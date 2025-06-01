@@ -1,474 +1,477 @@
 import React, { useState } from 'react';
-import { Head, useForm, usePage } from '@inertiajs/react';
-import AppLayout from '@/layouts/app-layout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Head, Link, useForm } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { 
     User, 
-    Building2, 
+    Building, 
+    Mail, 
+    Calendar, 
     Shield, 
-    CreditCard, 
-    Users, 
-    FileText, 
-    Settings,
-    Edit2,
+    Settings, 
+    CreditCard,
+    Users,
+    Edit,
     Save,
-    X,
-    Key,
-    Smartphone,
-    Monitor,
-    Crown
+    X
 } from 'lucide-react';
+import AppLayout from '@/layouts/app-layout';
 import { toast } from 'react-hot-toast';
-import ErrorBoundary from '@/components/ErrorBoundary';
 
 interface User {
     id: number;
     name: string;
     email: string;
-    email_verified_at?: string;
-    org_id: number;
-    role: 'admin' | 'member' | 'viewer';
+    role: string;
+    subscription_plan: string;
+    ai_credits_remaining: number;
+    ai_credits_monthly_limit: number;
     created_at: string;
-    updated_at: string;
+    email_verified_at: string;
 }
 
 interface Organization {
     id: number;
     name: string;
     slug: string;
-    subscription_plan: 'basic' | 'premium' | 'enterprise';
-    credits_remaining: number;
-    credits_used_this_month: number;
-    monthly_credits_included: number;
     created_at: string;
+    users_count: number;
 }
 
-interface PageProps {
+interface AccountProps {
     user: User;
     organization: Organization;
-    stats: {
-        total_contracts: number;
-        pending_alerts: number;
-        users_count: number;
-    };
 }
 
-const CreditProgressBar = ({ used, total }: { used: number; total: number }) => {
-    const percentage = total > 0 ? (used / total) * 100 : 0;
-    const remaining = Math.max(0, total - used);
-    
-    return (
-        <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Crédits utilisés</span>
-                <span className="font-medium">{used} / {total}</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                    className={`h-2 rounded-full transition-all duration-300 ${
-                        percentage > 90 ? 'bg-red-500' : 
-                        percentage > 70 ? 'bg-yellow-500' : 'bg-green-500'
-                    }`}
-                    style={{ width: `${Math.min(percentage, 100)}%` }}
-                />
-            </div>
-            <div className="flex justify-between text-xs text-gray-500">
-                <span>{remaining} restants</span>
-                <span>{percentage.toFixed(0)}% utilisés</span>
-            </div>
-        </div>
-    );
-};
+export default function Account({ user, organization }: AccountProps) {
+    const [isEditingProfile, setIsEditingProfile] = useState(false);
+    const [isEditingOrg, setIsEditingOrg] = useState(false);
 
-const ProfileSection = ({ user }: { user: User }) => {
-    const [isEditing, setIsEditing] = useState(false);
-    const { data, setData, put, processing, errors, reset } = useForm({
+    // Formulaires
+    const profileForm = useForm({
         name: user.name,
         email: user.email,
     });
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        put('/account/profile', {
-            onSuccess: () => {
-                setIsEditing(false);
-                toast.success('Profil mis à jour avec succès');
-            },
-            onError: () => {
-                toast.error('Erreur lors de la mise à jour');
-            },
-        });
-    };
-
-    const handleCancel = () => {
-        reset();
-        setIsEditing(false);
-    };
-
-    return (
-        <Card>
-            <CardHeader>
-                <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center">
-                        <User className="h-5 w-5 mr-2" />
-                        Profil
-                    </CardTitle>
-                    {!isEditing && (
-                        <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
-                            <Edit2 className="h-4 w-4 mr-1" />
-                            Modifier
-                        </Button>
-                    )}
-                </div>
-            </CardHeader>
-            <CardContent>
-                {isEditing ? (
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <div>
-                            <Label htmlFor="name">Nom complet</Label>
-                            <Input
-                                id="name"
-                                value={data.name}
-                                onChange={(e) => setData('name', e.target.value)}
-                                className={errors.name ? 'border-red-300' : ''}
-                            />
-                            {errors.name && <p className="text-red-600 text-sm mt-1">{errors.name}</p>}
-                        </div>
-                        <div>
-                            <Label htmlFor="email">Email</Label>
-                            <Input
-                                id="email"
-                                type="email"
-                                value={data.email}
-                                onChange={(e) => setData('email', e.target.value)}
-                                className={errors.email ? 'border-red-300' : ''}
-                            />
-                            {errors.email && <p className="text-red-600 text-sm mt-1">{errors.email}</p>}
-                        </div>
-                        <div className="flex gap-2">
-                            <Button type="submit" disabled={processing}>
-                                <Save className="h-4 w-4 mr-1" />
-                                {processing ? 'Sauvegarde...' : 'Sauvegarder'}
-                            </Button>
-                            <Button type="button" variant="outline" onClick={handleCancel}>
-                                <X className="h-4 w-4 mr-1" />
-                                Annuler
-                            </Button>
-                        </div>
-                    </form>
-                ) : (
-                    <div className="space-y-4">
-                        <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                            <span className="text-gray-600">Nom</span>
-                            <span className="font-medium">{user.name}</span>
-                        </div>
-                        <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                            <span className="text-gray-600">Email</span>
-                            <div className="flex items-center gap-2">
-                                <span className="font-medium">{user.email}</span>
-                                {user.email_verified_at && (
-                                    <Badge variant="secondary" className="text-xs">Vérifié</Badge>
-                                )}
-                            </div>
-                        </div>
-                        <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                            <span className="text-gray-600">Rôle</span>
-                            <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
-                                {user.role === 'admin' ? 'Administrateur' : 
-                                 user.role === 'member' ? 'Membre' : 'Observateur'}
-                            </Badge>
-                        </div>
-                        <div className="flex justify-between items-center py-2">
-                            <span className="text-gray-600">Membre depuis</span>
-                            <span className="font-medium">
-                                {new Date(user.created_at).toLocaleDateString('fr-FR')}
-                            </span>
-                        </div>
-                    </div>
-                )}
-            </CardContent>
-        </Card>
-    );
-};
-
-const OrganizationSection = ({ organization, user }: { organization: Organization; user: User }) => {
-    const [isEditing, setIsEditing] = useState(false);
-    const { data, setData, put, processing, errors, reset } = useForm({
+    const orgForm = useForm({
         name: organization.name,
     });
 
-    const canEdit = user.role === 'admin';
-
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleProfileSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        put('/account/organization', {
+        profileForm.put('/account/profile', {
             onSuccess: () => {
-                setIsEditing(false);
-                toast.success('Organisation mise à jour avec succès');
+                setIsEditingProfile(false);
+                toast.success('Profil mis à jour');
             },
             onError: () => {
                 toast.error('Erreur lors de la mise à jour');
-            },
+            }
         });
     };
 
-    const handleCancel = () => {
-        reset();
-        setIsEditing(false);
+    const handleOrgSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        orgForm.put('/account/organization', {
+            onSuccess: () => {
+                setIsEditingOrg(false);
+                toast.success('Organisation mise à jour');
+            },
+            onError: () => {
+                toast.error('Erreur lors de la mise à jour');
+            }
+        });
+    };
+
+    const getRoleBadgeVariant = (role: string) => {
+        switch (role) {
+            case 'admin': return 'default';
+            case 'user': return 'secondary';
+            case 'viewer': return 'outline';
+            default: return 'outline';
+        }
+    };
+
+    const getRoleLabel = (role: string) => {
+        switch (role) {
+            case 'admin': return 'Administrateur';
+            case 'user': return 'Utilisateur';
+            case 'viewer': return 'Lecteur';
+            default: return role;
+        }
     };
 
     const getPlanLabel = (plan: string) => {
         switch (plan) {
-            case 'basic': return 'Gratuit';
             case 'premium': return 'Premium';
+            case 'basic': return 'Basic';
             case 'enterprise': return 'Enterprise';
-            default: return plan;
+            default: return 'Gratuit';
         }
     };
 
     return (
-        <Card>
-            <CardHeader>
-                <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center">
-                        <Building2 className="h-5 w-5 mr-2" />
-                        Organisation
-                    </CardTitle>
-                    {canEdit && !isEditing && (
-                        <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
-                            <Edit2 className="h-4 w-4 mr-1" />
-                            Modifier
-                        </Button>
-                    )}
-                </div>
-            </CardHeader>
-            <CardContent>
-                {isEditing && canEdit ? (
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <div>
-                            <Label htmlFor="orgName">Nom de l'organisation</Label>
-                            <Input
-                                id="orgName"
-                                value={data.name}
-                                onChange={(e) => setData('name', e.target.value)}
-                                className={errors.name ? 'border-red-300' : ''}
-                            />
-                            {errors.name && <p className="text-red-600 text-sm mt-1">{errors.name}</p>}
-                        </div>
-                        <div className="flex gap-2">
-                            <Button type="submit" disabled={processing}>
-                                <Save className="h-4 w-4 mr-1" />
-                                {processing ? 'Sauvegarde...' : 'Sauvegarder'}
-                            </Button>
-                            <Button type="button" variant="outline" onClick={handleCancel}>
-                                <X className="h-4 w-4 mr-1" />
-                                Annuler
-                            </Button>
-                        </div>
-                    </form>
-                ) : (
-                    <div className="space-y-4">
-                        <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                            <span className="text-gray-600">Nom</span>
-                            <span className="font-medium">{organization.name}</span>
-                        </div>
-                        <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                            <span className="text-gray-600">Plan</span>
-                            <div className="flex items-center gap-2">
-                                <Badge variant={organization.subscription_plan === 'premium' ? 'default' : 'secondary'}>
-                                    {organization.subscription_plan === 'premium' && <Crown className="h-3 w-3 mr-1" />}
-                                    {getPlanLabel(organization.subscription_plan)}
-                                </Badge>
-                            </div>
-                        </div>
-                        <div className="flex justify-between items-center py-2">
-                            <span className="text-gray-600">Créée le</span>
-                            <span className="font-medium">
-                                {new Date(organization.created_at).toLocaleDateString('fr-FR')}
-                            </span>
-                        </div>
-                    </div>
-                )}
-            </CardContent>
-        </Card>
-    );
-};
-
-const SecuritySection = () => (
-    <Card>
-        <CardHeader>
-            <CardTitle className="flex items-center">
-                <Shield className="h-5 w-5 mr-2" />
-                Sécurité
-            </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-            <div className="space-y-3">
-                <Button variant="outline" className="w-full justify-start" asChild>
-                    <a href="/account/password">
-                        <Key className="h-4 w-4 mr-2" />
-                        Changer le mot de passe
-                    </a>
-                </Button>
-                <Button variant="outline" className="w-full justify-start" asChild>
-                    <a href="/account/two-factor">
-                        <Smartphone className="h-4 w-4 mr-2" />
-                        Authentification à deux facteurs
-                    </a>
-                </Button>
-                <Button variant="outline" className="w-full justify-start" asChild>
-                    <a href="/account/sessions">
-                        <Monitor className="h-4 w-4 mr-2" />
-                        Sessions actives
-                    </a>
-                </Button>
-            </div>
-        </CardContent>
-    </Card>
-);
-
-const QuickActionsSection = ({ stats }: { stats: PageProps['stats'] }) => (
-    <Card>
-        <CardHeader>
-            <CardTitle className="flex items-center">
-                <Settings className="h-5 w-5 mr-2" />
-                Actions rapides
-            </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 gap-3">
-                <Button variant="outline" className="justify-start" asChild>
-                    <a href="/settings">
-                        <Settings className="h-4 w-4 mr-2" />
-                        Paramètres généraux
-                    </a>
-                </Button>
-                <Button variant="outline" className="justify-start" asChild>
-                    <a href="/settings/users">
-                        <Users className="h-4 w-4 mr-2" />
-                        Gestion des utilisateurs ({stats.users_count})
-                    </a>
-                </Button>
-                <Button variant="outline" className="justify-start" asChild>
-                    <a href="/billing/invoices">
-                        <FileText className="h-4 w-4 mr-2" />
-                        Factures
-                    </a>
-                </Button>
-            </div>
-        </CardContent>
-    </Card>
-);
-
-const SubscriptionSidebar = ({ organization }: { organization: Organization }) => (
-    <Card className="lg:sticky lg:top-6">
-        <CardHeader>
-            <CardTitle className="flex items-center">
-                <CreditCard className="h-5 w-5 mr-2" />
-                Abonnement
-            </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-            <div className="text-center">
-                <Badge variant={organization.subscription_plan === 'premium' ? 'default' : 'secondary'} className="mb-3">
-                    {organization.subscription_plan === 'premium' && <Crown className="h-3 w-3 mr-1" />}
-                    Plan {organization.subscription_plan === 'basic' ? 'Gratuit' : 
-                          organization.subscription_plan === 'premium' ? 'Premium' : 'Enterprise'}
-                </Badge>
-                <div className="text-2xl font-bold text-gray-900 mb-1">
-                    {organization.credits_remaining}
-                </div>
-                <div className="text-sm text-gray-500 mb-4">
-                    crédits restants
-                </div>
-            </div>
-
-            <CreditProgressBar 
-                used={organization.credits_used_this_month} 
-                total={organization.monthly_credits_included} 
-            />
-
-            <Separator />
-
-            <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                    <span className="text-gray-600">Plan actuel</span>
-                    <span className="font-medium capitalize">{organization.subscription_plan}</span>
-                </div>
-                <div className="flex justify-between">
-                    <span className="text-gray-600">Crédits mensuels</span>
-                    <span className="font-medium">{organization.monthly_credits_included}</span>
-                </div>
-                <div className="flex justify-between">
-                    <span className="text-gray-600">Utilisés ce mois</span>
-                    <span className="font-medium">{organization.credits_used_this_month}</span>
-                </div>
-            </div>
-
-            <Button className="w-full" asChild>
-                <a href="/billing">
-                    <CreditCard className="h-4 w-4 mr-2" />
-                    Gérer l'abonnement
-                </a>
-            </Button>
-        </CardContent>
-    </Card>
-);
-
-export default function Account() {
-    const { props } = usePage<PageProps>();
-    
-    // Protection contre les props manquantes avec vérification plus robuste
-    if (!props || !props.user || !props.organization) {
-        throw new Error('Données utilisateur ou organisation manquantes');
-    }
-
-    // Validation des types des props
-    if (typeof props.user !== 'object' || typeof props.organization !== 'object') {
-        throw new Error('Format des données utilisateur incorrect');
-    }
-
-    const { user, organization, stats } = props;
-
-    // Validation des données critiques
-    if (!user.id || !organization.id) {
-        throw new Error('Identifiants utilisateur ou organisation manquants');
-    }
-
-    return (
-        <ErrorBoundary>
-            <AppLayout>
-                <Head title="Mon compte" />
-                
-                <div className="space-y-6">
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-900">Mon compte</h1>
-                        <p className="text-gray-600 mt-2">
-                            Gérez vos informations personnelles et les paramètres de votre organisation
-                        </p>
+        <AppLayout>
+            <Head title="Mon Compte" />
+            
+            <div className="py-8">
+                <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+                    {/* En-tête */}
+                    <div className="mb-8">
+                        <h1 className="text-3xl font-bold text-gray-900 mb-2">Mon Compte</h1>
+                        <p className="text-gray-600">Gérez vos informations personnelles et les paramètres de votre organisation</p>
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Contenu principal */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        {/* Colonne principale */}
                         <div className="lg:col-span-2 space-y-6">
-                            <ProfileSection user={user} />
-                            <OrganizationSection organization={organization} user={user} />
-                            <SecuritySection />
-                            <QuickActionsSection stats={stats} />
+                            {/* Informations du profil */}
+                            <Card>
+                                <CardHeader className="flex flex-row items-center justify-between">
+                                    <CardTitle className="flex items-center">
+                                        <User className="h-5 w-5 mr-2" />
+                                        Informations personnelles
+                                    </CardTitle>
+                                    {!isEditingProfile ? (
+                                        <Button 
+                                            variant="outline" 
+                                            size="sm"
+                                            onClick={() => setIsEditingProfile(true)}
+                                        >
+                                            <Edit className="h-4 w-4 mr-2" />
+                                            Modifier
+                                        </Button>
+                                    ) : (
+                                        <div className="flex gap-2">
+                                            <Button 
+                                                variant="outline" 
+                                                size="sm"
+                                                onClick={() => {
+                                                    setIsEditingProfile(false);
+                                                    profileForm.reset();
+                                                }}
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </Button>
+                                            <Button 
+                                                size="sm"
+                                                onClick={handleProfileSubmit}
+                                                disabled={profileForm.processing}
+                                            >
+                                                <Save className="h-4 w-4 mr-2" />
+                                                Sauvegarder
+                                            </Button>
+                                        </div>
+                                    )}
+                                </CardHeader>
+                                <CardContent>
+                                    {!isEditingProfile ? (
+                                        <div className="space-y-4">
+                                            <div>
+                                                <Label className="text-sm font-medium text-gray-500">Nom complet</Label>
+                                                <p className="text-gray-900 font-medium">{user.name}</p>
+                                            </div>
+                                            <div>
+                                                <Label className="text-sm font-medium text-gray-500">Adresse email</Label>
+                                                <div className="flex items-center gap-2">
+                                                    <p className="text-gray-900 font-medium">{user.email}</p>
+                                                    {user.email_verified_at ? (
+                                                        <Badge variant="default" className="text-xs">
+                                                            <Shield className="h-3 w-3 mr-1" />
+                                                            Vérifié
+                                                        </Badge>
+                                                    ) : (
+                                                        <Badge variant="destructive" className="text-xs">
+                                                            Non vérifié
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <Label className="text-sm font-medium text-gray-500">Rôle</Label>
+                                                <div className="flex items-center gap-2">
+                                                    <Badge variant={getRoleBadgeVariant(user.role)}>
+                                                        {getRoleLabel(user.role)}
+                                                    </Badge>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <Label className="text-sm font-medium text-gray-500">Membre depuis</Label>
+                                                <p className="text-gray-900 font-medium">
+                                                    {new Date(user.created_at).toLocaleDateString('fr-FR', {
+                                                        year: 'numeric',
+                                                        month: 'long',
+                                                        day: 'numeric'
+                                                    })}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <form onSubmit={handleProfileSubmit} className="space-y-4">
+                                            <div>
+                                                <Label htmlFor="name">Nom complet</Label>
+                                                <Input
+                                                    id="name"
+                                                    value={profileForm.data.name}
+                                                    onChange={(e) => profileForm.setData('name', e.target.value)}
+                                                    className={profileForm.errors.name ? 'border-red-300' : ''}
+                                                />
+                                                {profileForm.errors.name && (
+                                                    <p className="text-red-600 text-sm mt-1">{profileForm.errors.name}</p>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <Label htmlFor="email">Adresse email</Label>
+                                                <Input
+                                                    id="email"
+                                                    type="email"
+                                                    value={profileForm.data.email}
+                                                    onChange={(e) => profileForm.setData('email', e.target.value)}
+                                                    className={profileForm.errors.email ? 'border-red-300' : ''}
+                                                />
+                                                {profileForm.errors.email && (
+                                                    <p className="text-red-600 text-sm mt-1">{profileForm.errors.email}</p>
+                                                )}
+                                            </div>
+                                        </form>
+                                    )}
+                                </CardContent>
+                            </Card>
+
+                            {/* Informations de l'organisation */}
+                            <Card>
+                                <CardHeader className="flex flex-row items-center justify-between">
+                                    <CardTitle className="flex items-center">
+                                        <Building className="h-5 w-5 mr-2" />
+                                        Organisation
+                                    </CardTitle>
+                                    {user.role === 'admin' && !isEditingOrg ? (
+                                        <Button 
+                                            variant="outline" 
+                                            size="sm"
+                                            onClick={() => setIsEditingOrg(true)}
+                                        >
+                                            <Edit className="h-4 w-4 mr-2" />
+                                            Modifier
+                                        </Button>
+                                    ) : user.role === 'admin' && isEditingOrg ? (
+                                        <div className="flex gap-2">
+                                            <Button 
+                                                variant="outline" 
+                                                size="sm"
+                                                onClick={() => {
+                                                    setIsEditingOrg(false);
+                                                    orgForm.reset();
+                                                }}
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </Button>
+                                            <Button 
+                                                size="sm"
+                                                onClick={handleOrgSubmit}
+                                                disabled={orgForm.processing}
+                                            >
+                                                <Save className="h-4 w-4 mr-2" />
+                                                Sauvegarder
+                                            </Button>
+                                        </div>
+                                    ) : null}
+                                </CardHeader>
+                                <CardContent>
+                                    {!isEditingOrg ? (
+                                        <div className="space-y-4">
+                                            <div>
+                                                <Label className="text-sm font-medium text-gray-500">Nom de l'organisation</Label>
+                                                <p className="text-gray-900 font-medium">{organization.name}</p>
+                                            </div>
+                                            <div>
+                                                <Label className="text-sm font-medium text-gray-500">Identifiant</Label>
+                                                <p className="text-gray-900 font-mono text-sm">{organization.slug}</p>
+                                            </div>
+                                            <div>
+                                                <Label className="text-sm font-medium text-gray-500">Nombre d'utilisateurs</Label>
+                                                <p className="text-gray-900 font-medium">{organization.users_count}</p>
+                                            </div>
+                                            <div>
+                                                <Label className="text-sm font-medium text-gray-500">Créée le</Label>
+                                                <p className="text-gray-900 font-medium">
+                                                    {new Date(organization.created_at).toLocaleDateString('fr-FR', {
+                                                        year: 'numeric',
+                                                        month: 'long',
+                                                        day: 'numeric'
+                                                    })}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <form onSubmit={handleOrgSubmit} className="space-y-4">
+                                            <div>
+                                                <Label htmlFor="org_name">Nom de l'organisation</Label>
+                                                <Input
+                                                    id="org_name"
+                                                    value={orgForm.data.name}
+                                                    onChange={(e) => orgForm.setData('name', e.target.value)}
+                                                    className={orgForm.errors.name ? 'border-red-300' : ''}
+                                                />
+                                                {orgForm.errors.name && (
+                                                    <p className="text-red-600 text-sm mt-1">{orgForm.errors.name}</p>
+                                                )}
+                                            </div>
+                                        </form>
+                                    )}
+                                </CardContent>
+                            </Card>
+
+                            {/* Sécurité et confidentialité */}
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center">
+                                        <Shield className="h-5 w-5 mr-2" />
+                                        Sécurité et confidentialité
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                                        <div>
+                                            <h3 className="font-medium">Mot de passe</h3>
+                                            <p className="text-sm text-gray-600">Modifiez votre mot de passe</p>
+                                        </div>
+                                        <Button variant="outline" asChild>
+                                            <Link href="/account/password">
+                                                Changer
+                                            </Link>
+                                        </Button>
+                                    </div>
+                                    
+                                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                                        <div>
+                                            <h3 className="font-medium">Authentification à deux facteurs</h3>
+                                            <p className="text-sm text-gray-600">Sécurisez votre compte avec 2FA</p>
+                                        </div>
+                                        <Button variant="outline" asChild>
+                                            <Link href="/account/2fa">
+                                                Configurer
+                                            </Link>
+                                        </Button>
+                                    </div>
+
+                                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                                        <div>
+                                            <h3 className="font-medium">Sessions actives</h3>
+                                            <p className="text-sm text-gray-600">Gérez vos sessions de connexion</p>
+                                        </div>
+                                        <Button variant="outline" asChild>
+                                            <Link href="/account/sessions">
+                                                Voir
+                                            </Link>
+                                        </Button>
+                                    </div>
+                                </CardContent>
+                            </Card>
                         </div>
 
                         {/* Sidebar */}
                         <div className="space-y-6">
-                            <SubscriptionSidebar organization={organization} />
+                            {/* Plan et crédits */}
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center">
+                                        <CreditCard className="h-5 w-5 mr-2" />
+                                        Abonnement
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="text-center">
+                                        <Badge className="mb-2 bg-gradient-to-r from-purple-600 to-blue-600">
+                                            {getPlanLabel(user.subscription_plan)}
+                                        </Badge>
+                                        <div className="text-2xl font-bold text-blue-600">
+                                            {user.ai_credits_remaining}
+                                        </div>
+                                        <p className="text-sm text-gray-600">
+                                            crédits IA restants
+                                        </p>
+                                        <p className="text-xs text-gray-500">
+                                            sur {user.ai_credits_monthly_limit} ce mois
+                                        </p>
+                                    </div>
+
+                                    <div className="w-full bg-gray-200 rounded-full h-2">
+                                        <div 
+                                            className="h-2 rounded-full bg-gradient-to-r from-blue-500 to-purple-500"
+                                            style={{ 
+                                                width: `${(user.ai_credits_remaining / user.ai_credits_monthly_limit) * 100}%` 
+                                            }}
+                                        ></div>
+                                    </div>
+
+                                    <Button variant="outline" className="w-full" asChild>
+                                        <Link href="/billing">
+                                            <CreditCard className="h-4 w-4 mr-2" />
+                                            Gérer l'abonnement
+                                        </Link>
+                                    </Button>
+                                </CardContent>
+                            </Card>
+
+                            {/* Actions rapides */}
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center">
+                                        <Settings className="h-5 w-5 mr-2" />
+                                        Actions rapides
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                    <Button variant="outline" className="w-full" asChild>
+                                        <Link href="/settings">
+                                            <Settings className="h-4 w-4 mr-2" />
+                                            Paramètres
+                                        </Link>
+                                    </Button>
+
+                                    {user.role === 'admin' && (
+                                        <Button variant="outline" className="w-full" asChild>
+                                            <Link href="/account/users">
+                                                <Users className="h-4 w-4 mr-2" />
+                                                Gérer les utilisateurs
+                                            </Link>
+                                        </Button>
+                                    )}
+
+                                    <Button variant="outline" className="w-full" asChild>
+                                        <Link href="/billing/invoices">
+                                            <Mail className="h-4 w-4 mr-2" />
+                                            Factures
+                                        </Link>
+                                    </Button>
+                                </CardContent>
+                            </Card>
+
+                            {/* Statistiques */}
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center">
+                                        <Calendar className="h-5 w-5 mr-2" />
+                                        Activité
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                    <div className="text-center">
+                                        <div className="text-lg font-bold text-gray-900">
+                                            {new Date().getFullYear() - new Date(user.created_at).getFullYear() || '< 1'}
+                                        </div>
+                                        <p className="text-sm text-gray-600">année(s) avec nous</p>
+                                    </div>
+                                </CardContent>
+                            </Card>
                         </div>
                     </div>
                 </div>
-            </AppLayout>
-        </ErrorBoundary>
+            </div>
+        </AppLayout>
     );
 } 

@@ -1,543 +1,555 @@
 import React, { useState } from 'react';
-import { Head, useForm, usePage } from '@inertiajs/react';
-import AppLayout from '@/layouts/app-layout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Head, Link, router } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { 
     CreditCard, 
-    Crown, 
-    Download, 
     Check, 
-    Zap,
+    X, 
+    Download, 
     Calendar,
-    Euro,
-    ArrowRight,
-    AlertTriangle,
-    ShieldCheck,
+    Zap,
     Users,
-    BarChart3
+    Shield,
+    Star,
+    ArrowLeft,
+    RefreshCw
 } from 'lucide-react';
+import AppLayout from '@/layouts/app-layout';
 import { toast } from 'react-hot-toast';
-import ErrorBoundary from '@/components/ErrorBoundary';
 
 interface User {
     id: number;
     name: string;
     email: string;
-    org_id: number;
-    role: string;
-}
-
-interface Organization {
-    id: number;
-    name: string;
-    subscription_plan: 'basic' | 'premium' | 'enterprise';
-    credits_remaining: number;
-    credits_used_this_month: number;
-    monthly_credits_included: number;
+    subscription_plan: string;
+    ai_credits_remaining: number;
+    ai_credits_monthly_limit: number;
+    ai_credits_purchased: number;
+    credits_reset_date: string;
+    subscription_status: string;
     subscription_ends_at?: string;
-    created_at: string;
-}
-
-interface CreditPack {
-    id: string;
-    name: string;
-    credits: number;
-    price: number;
-    price_per_credit: number;
-    popular?: boolean;
-}
-
-interface Plan {
-    id: string;
-    name: string;
-    price: number;
-    credits: number;
-    features: string[];
-    popular?: boolean;
-    current?: boolean;
 }
 
 interface Invoice {
     id: string;
-    number: string;
     amount: number;
-    status: 'paid' | 'pending' | 'failed';
+    currency: string;
+    status: string;
     created_at: string;
     download_url: string;
+    description: string;
 }
 
-interface PageProps {
+interface BillingProps {
     user: User;
-    organization: Organization;
-    credit_packs: CreditPack[];
-    plans: Plan[];
     invoices: Invoice[];
+    payment_methods: any[];
+    stripe_public_key: string;
 }
 
-const CreditProgressBar = ({ used, total }: { used: number; total: number }) => {
-    const percentage = total > 0 ? (used / total) * 100 : 0;
-    const remaining = Math.max(0, total - used);
-    
-    return (
-        <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Crédits utilisés ce mois</span>
-                <span className="font-medium">{used} / {total}</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-3">
-                <div 
-                    className={`h-3 rounded-full transition-all duration-300 ${
-                        percentage > 90 ? 'bg-red-500' : 
-                        percentage > 70 ? 'bg-yellow-500' : 'bg-green-500'
-                    }`}
-                    style={{ width: `${Math.min(percentage, 100)}%` }}
-                />
-            </div>
-            <div className="flex justify-between text-xs text-gray-500">
-                <span>{remaining} restants</span>
-                <span>{percentage.toFixed(0)}% utilisés</span>
-            </div>
-        </div>
-    );
-};
+const PLANS = [
+    {
+        id: 'basic',
+        name: 'Basic',
+        price: 0,
+        credits: 10,
+        features: [
+            'Pattern matching gratuit',
+            '10 crédits IA par mois',
+            'Support par email',
+            'Export PDF',
+            '1 organisation'
+        ],
+        limitations: [
+            'Alertes limitées',
+            'Pas de support prioritaire'
+        ]
+    },
+    {
+        id: 'premium',
+        name: 'Premium',
+        price: 19.99,
+        credits: 30,
+        popular: true,
+        features: [
+            'Tout du plan Basic',
+            '30 crédits IA par mois',
+            'Analyses IA avancées',
+            'Alertes illimitées',
+            'Support prioritaire',
+            'Intégrations Discord/Slack',
+            'API access'
+        ],
+        limitations: []
+    },
+    {
+        id: 'enterprise',
+        name: 'Enterprise',
+        price: 'Sur devis',
+        credits: 'Illimité',
+        features: [
+            'Tout du plan Premium',
+            'Crédits IA illimités',
+            'Organisations multiples',
+            'Support dédié 24/7',
+            'SLA garanti',
+            'Déploiement on-premise',
+            'Formation personnalisée'
+        ],
+        limitations: []
+    }
+];
 
-const CurrentSubscription = ({ organization }: { organization: Organization }) => {
-    const getPlanName = (plan: string) => {
-        switch (plan) {
-            case 'basic': return 'Plan Gratuit';
-            case 'premium': return 'Plan Premium';
-            case 'enterprise': return 'Plan Enterprise';
-            default: return plan;
+export default function Billing({ user, invoices, payment_methods, stripe_public_key }: BillingProps) {
+    const [isChangingPlan, setIsChangingPlan] = useState(false);
+    const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
+
+    const handlePlanChange = async (planId: string) => {
+        setIsChangingPlan(true);
+        setSelectedPlan(planId);
+
+        try {
+            const response = await fetch('/billing/subscribe', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+                body: JSON.stringify({ plan: planId }),
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.redirect_url) {
+                    window.location.href = data.redirect_url;
+                } else {
+                    toast.success('Plan mis à jour avec succès !');
+                    router.reload();
+                }
+            } else {
+                throw new Error('Erreur lors du changement de plan');
+            }
+        } catch (error) {
+            toast.error('Erreur lors du changement de plan');
+        } finally {
+            setIsChangingPlan(false);
+            setSelectedPlan(null);
         }
     };
 
-    const getPlanIcon = (plan: string) => {
-        switch (plan) {
-            case 'premium': return <Crown className="h-5 w-5" />;
-            case 'enterprise': return <ShieldCheck className="h-5 w-5" />;
-            default: return <Zap className="h-5 w-5" />;
+    const handleCancelSubscription = async () => {
+        try {
+            const response = await fetch('/billing/cancel', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+            });
+
+            if (response.ok) {
+                toast.success('Abonnement annulé. Il reste actif jusqu\'à la fin de la période de facturation.');
+                router.reload();
+            } else {
+                throw new Error('Erreur lors de l\'annulation');
+            }
+        } catch (error) {
+            toast.error('Erreur lors de l\'annulation de l\'abonnement');
         }
     };
 
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center">
-                    <CreditCard className="h-5 w-5 mr-2" />
-                    Abonnement actuel
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        {getPlanIcon(organization.subscription_plan)}
-                        <div>
-                            <h3 className="font-semibold text-lg">
-                                {getPlanName(organization.subscription_plan)}
-                            </h3>
-                            <p className="text-sm text-gray-600">
-                                {organization.monthly_credits_included} crédits/mois
-                            </p>
-                        </div>
-                    </div>
-                    <Badge variant={organization.subscription_plan === 'premium' ? 'default' : 'secondary'}>
-                        {organization.subscription_plan === 'premium' && <Crown className="h-3 w-3 mr-1" />}
-                        Actuel
-                    </Badge>
-                </div>
+    const handleBuyCredits = async (amount: number) => {
+        try {
+            const response = await fetch('/api/credits/purchase', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+                body: JSON.stringify({ amount }),
+            });
 
-                <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex justify-between items-center mb-3">
-                        <span className="text-sm font-medium">Crédits disponibles</span>
-                        <span className="text-2xl font-bold text-blue-600">
-                            {organization.credits_remaining}
-                        </span>
-                    </div>
-                    <CreditProgressBar 
-                        used={organization.credits_used_this_month} 
-                        total={organization.monthly_credits_included} 
-                    />
-                </div>
-
-                {organization.subscription_ends_at && (
-                    <div className="text-sm text-gray-600 flex items-center">
-                        <Calendar className="h-4 w-4 mr-2" />
-                        Renouvellement le {new Date(organization.subscription_ends_at).toLocaleDateString('fr-FR')}
-                    </div>
-                )}
-            </CardContent>
-        </Card>
-    );
-};
-
-const CreditPacksSection = ({ packs }: { packs: CreditPack[] }) => {
-    const { post, processing } = useForm();
-
-    const handlePurchase = (packId: string) => {
-        post(`/billing/purchase-credits/${packId}`, {
-            onSuccess: () => {
-                toast.success('Achat de crédits initié avec succès');
-            },
-            onError: () => {
-                toast.error('Erreur lors de l\'achat de crédits');
-            },
-        });
+            if (response.ok) {
+                const data = await response.json();
+                if (data.redirect_url) {
+                    window.location.href = data.redirect_url;
+                } else {
+                    toast.success(`${amount} crédits ajoutés à votre compte !`);
+                    router.reload();
+                }
+            } else {
+                throw new Error('Erreur lors de l\'achat de crédits');
+            }
+        } catch (error) {
+            toast.error('Erreur lors de l\'achat de crédits');
+        }
     };
 
-    if (!packs || packs.length === 0) {
-        return (
-            <Card>
-                <CardHeader>
-                    <CardTitle>Packs de crédits</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <p className="text-gray-600">Aucun pack de crédits disponible pour le moment.</p>
-                </CardContent>
-            </Card>
-        );
-    }
-
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center">
-                    <Zap className="h-5 w-5 mr-2" />
-                    Packs de crédits
-                </CardTitle>
-                <p className="text-gray-600 text-sm">
-                    Achetez des crédits supplémentaires pour vos analyses IA
-                </p>
-            </CardHeader>
-            <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {packs.map((pack) => (
-                        <div 
-                            key={pack.id}
-                            className={`border-2 rounded-lg p-4 relative ${
-                                pack.popular ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
-                            }`}
-                        >
-                            {pack.popular && (
-                                <Badge className="absolute -top-2 left-1/2 transform -translate-x-1/2">
-                                    Populaire
-                                </Badge>
-                            )}
-                            <div className="text-center space-y-3">
-                                <h3 className="font-semibold text-lg">{pack.name}</h3>
-                                <div className="text-3xl font-bold text-blue-600">
-                                    {pack.credits}
-                                    <span className="text-sm text-gray-600 ml-1">crédits</span>
-                                </div>
-                                <div className="text-gray-600">
-                                    <span className="text-xl font-semibold">{pack.price}€</span>
-                                    <div className="text-xs">
-                                        {pack.price_per_credit.toFixed(2)}€ par crédit
-                                    </div>
-                                </div>
-                                <Button 
-                                    className="w-full"
-                                    onClick={() => handlePurchase(pack.id)}
-                                    disabled={processing}
-                                >
-                                    <Euro className="h-4 w-4 mr-2" />
-                                    {processing ? 'Traitement...' : 'Acheter'}
-                                </Button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </CardContent>
-        </Card>
-    );
-};
-
-const PlansSection = ({ plans, currentPlan }: { plans: Plan[]; currentPlan: string }) => {
-    const { post, processing } = useForm();
-
-    const handlePlanChange = (planId: string) => {
-        post(`/billing/change-plan/${planId}`, {
-            onSuccess: () => {
-                toast.success('Changement de plan initié avec succès');
-            },
-            onError: () => {
-                toast.error('Erreur lors du changement de plan');
-            },
-        });
-    };
-
-    if (!plans || plans.length === 0) {
-        return (
-            <Card>
-                <CardHeader>
-                    <CardTitle>Plans d'abonnement</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <p className="text-gray-600">Aucun plan d'abonnement disponible pour le moment.</p>
-                </CardContent>
-            </Card>
-        );
-    }
-
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center">
-                    <BarChart3 className="h-5 w-5 mr-2" />
-                    Plans d'abonnement
-                </CardTitle>
-                <p className="text-gray-600 text-sm">
-                    Choisissez le plan qui correspond le mieux à vos besoins
-                </p>
-            </CardHeader>
-            <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {plans.map((plan) => (
-                        <div 
-                            key={plan.id}
-                            className={`border-2 rounded-lg p-6 relative ${
-                                plan.popular ? 'border-blue-500 bg-blue-50' :
-                                plan.current ? 'border-green-500 bg-green-50' : 'border-gray-200'
-                            }`}
-                        >
-                            {plan.popular && (
-                                <Badge className="absolute -top-2 left-1/2 transform -translate-x-1/2">
-                                    Recommandé
-                                </Badge>
-                            )}
-                            {plan.current && (
-                                <Badge variant="secondary" className="absolute -top-2 left-1/2 transform -translate-x-1/2">
-                                    Plan actuel
-                                </Badge>
-                            )}
-                            
-                            <div className="text-center space-y-4">
-                                <h3 className="font-semibold text-xl">{plan.name}</h3>
-                                <div className="text-3xl font-bold">
-                                    {plan.price === 0 ? 'Gratuit' : `${plan.price}€`}
-                                    {plan.price > 0 && <span className="text-sm text-gray-600">/mois</span>}
-                                </div>
-                                <div className="text-gray-600">
-                                    {plan.credits === -1 ? 'Crédits illimités' : `${plan.credits} crédits/mois`}
-                                </div>
-                                
-                                <ul className="space-y-2 text-sm text-left">
-                                    {plan.features.map((feature, index) => (
-                                        <li key={index} className="flex items-center">
-                                            <Check className="h-4 w-4 text-green-500 mr-2 flex-shrink-0" />
-                                            {feature}
-                                        </li>
-                                    ))}
-                                </ul>
-                                
-                                {!plan.current && (
-                                    <Button 
-                                        className="w-full"
-                                        variant={plan.popular ? 'default' : 'outline'}
-                                        onClick={() => handlePlanChange(plan.id)}
-                                        disabled={processing}
-                                    >
-                                        {processing ? 'Traitement...' : 
-                                         plan.id === 'basic' ? 'Rétrograder' :
-                                         plan.price > (plans.find(p => p.current)?.price || 0) ? 'Mettre à niveau' : 'Changer'}
-                                        <ArrowRight className="h-4 w-4 ml-2" />
-                                    </Button>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </CardContent>
-        </Card>
-    );
-};
-
-const InvoicesSection = ({ invoices }: { invoices: Invoice[] }) => {
     const getStatusBadge = (status: string) => {
         switch (status) {
-            case 'paid':
-                return <Badge variant="secondary" className="text-green-700 bg-green-100">Payée</Badge>;
-            case 'pending':
-                return <Badge variant="outline">En attente</Badge>;
-            case 'failed':
-                return <Badge variant="destructive">Échec</Badge>;
+            case 'active':
+                return <Badge variant="default">Actif</Badge>;
+            case 'canceled':
+                return <Badge variant="destructive">Annulé</Badge>;
+            case 'past_due':
+                return <Badge variant="secondary">En retard</Badge>;
             default:
                 return <Badge variant="outline">{status}</Badge>;
         }
     };
 
-    if (!invoices || invoices.length === 0) {
-        return (
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center">
-                        <Download className="h-5 w-5 mr-2" />
-                        Historique des factures
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <p className="text-gray-600">Aucune facture disponible.</p>
-                </CardContent>
-            </Card>
-        );
-    }
+    const formatDate = (dateString: string) => {
+        return new Date(dateString).toLocaleDateString('fr-FR');
+    };
+
+    const formatAmount = (amount: number, currency: string = 'EUR') => {
+        return new Intl.NumberFormat('fr-FR', {
+            style: 'currency',
+            currency: currency,
+        }).format(amount / 100);
+    };
 
     return (
-        <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center">
-                    <Download className="h-5 w-5 mr-2" />
-                    Historique des factures
-                </CardTitle>
-            </CardHeader>
-            <CardContent>
-                <div className="space-y-3">
-                    {invoices.slice(0, 5).map((invoice) => (
-                        <div key={invoice.id} className="flex items-center justify-between p-3 border rounded-lg">
-                            <div className="flex-1">
-                                <div className="flex items-center gap-3">
-                                    <span className="font-medium">{invoice.number}</span>
-                                    {getStatusBadge(invoice.status)}
+        <AppLayout>
+            <Head title="Facturation" />
+            
+            <div className="py-8">
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+                    {/* Navigation */}
+                    <div className="mb-6">
+                        <Link
+                            href="/account"
+                            className="inline-flex items-center text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors"
+                        >
+                            <ArrowLeft className="w-4 h-4 mr-1" />
+                            Retour au compte
+                        </Link>
+                    </div>
+
+                    {/* En-tête */}
+                    <div className="mb-8">
+                        <h1 className="text-3xl font-bold text-gray-900 mb-2">Facturation et abonnements</h1>
+                        <p className="text-gray-600">Gérez votre abonnement, vos crédits et vos factures</p>
+                    </div>
+
+                    {/* Abonnement actuel */}
+                    <Card className="mb-8">
+                        <CardHeader>
+                            <CardTitle className="flex items-center">
+                                <CreditCard className="h-5 w-5 mr-2" />
+                                Abonnement actuel
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div>
+                                    <h3 className="font-medium text-gray-900 mb-2">Plan</h3>
+                                    <div className="flex items-center gap-2">
+                                        <Badge className="bg-gradient-to-r from-purple-600 to-blue-600 text-white">
+                                            {PLANS.find(p => p.id === user.subscription_plan)?.name || 'Basic'}
+                                        </Badge>
+                                        {getStatusBadge(user.subscription_status)}
+                                    </div>
                                 </div>
-                                <div className="text-sm text-gray-600 mt-1">
-                                    {new Date(invoice.created_at).toLocaleDateString('fr-FR')}
+                                
+                                <div>
+                                    <h3 className="font-medium text-gray-900 mb-2">Crédits IA</h3>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-2xl font-bold text-blue-600">
+                                            {user.ai_credits_remaining}
+                                        </span>
+                                        <span className="text-gray-500">/ {user.ai_credits_monthly_limit}</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+                                        <div 
+                                            className="h-2 rounded-full bg-gradient-to-r from-blue-500 to-purple-500"
+                                            style={{ 
+                                                width: `${(user.ai_credits_remaining / user.ai_credits_monthly_limit) * 100}%` 
+                                            }}
+                                        ></div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <h3 className="font-medium text-gray-900 mb-2">Prochaine facturation</h3>
+                                    <p className="text-gray-600">
+                                        {user.subscription_ends_at ? 
+                                            `Se termine le ${formatDate(user.subscription_ends_at)}` : 
+                                            `Renouvellement le ${formatDate(user.credits_reset_date)}`
+                                        }
+                                    </p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                                <span className="font-semibold">{invoice.amount}€</span>
-                                {invoice.status === 'paid' && (
-                                    <Button variant="outline" size="sm" asChild>
-                                        <a href={invoice.download_url} target="_blank" rel="noopener noreferrer">
-                                            <Download className="h-4 w-4" />
-                                        </a>
-                                    </Button>
-                                )}
+
+                            {user.subscription_status === 'canceled' && (
+                                <div className="mt-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                                    <p className="text-orange-800">
+                                        Votre abonnement a été annulé et se terminera le {formatDate(user.subscription_ends_at!)}.
+                                        Vous pouvez le réactiver à tout moment.
+                                    </p>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* Achat de crédits supplémentaires */}
+                    <Card className="mb-8">
+                        <CardHeader>
+                            <CardTitle className="flex items-center">
+                                <Zap className="h-5 w-5 mr-2" />
+                                Crédits supplémentaires
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-gray-600 mb-4">
+                                Besoin de plus de crédits IA ce mois ? Achetez des crédits supplémentaires à l'unité.
+                            </p>
+                            
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                {[
+                                    { amount: 10, price: 9.99, popular: false },
+                                    { amount: 25, price: 19.99, popular: true },
+                                    { amount: 50, price: 34.99, popular: false },
+                                ].map((pack) => (
+                                    <Card key={pack.amount} className={pack.popular ? 'border-blue-500 relative' : ''}>
+                                        {pack.popular && (
+                                            <div className="absolute -top-2 left-1/2 transform -translate-x-1/2">
+                                                <Badge className="bg-blue-500 text-white">
+                                                    <Star className="h-3 w-3 mr-1" />
+                                                    Populaire
+                                                </Badge>
+                                            </div>
+                                        )}
+                                        <CardContent className="p-4">
+                                            <div className="text-center">
+                                                <div className="text-2xl font-bold text-gray-900">{pack.amount}</div>
+                                                <div className="text-sm text-gray-600 mb-2">crédits IA</div>
+                                                <div className="text-lg font-semibold text-blue-600 mb-3">
+                                                    {pack.price}€
+                                                </div>
+                                                <div className="text-xs text-gray-500 mb-3">
+                                                    {(pack.price / pack.amount).toFixed(2)}€ par crédit
+                                                </div>
+                                                <Button 
+                                                    className="w-full"
+                                                    variant={pack.popular ? 'default' : 'outline'}
+                                                    onClick={() => handleBuyCredits(pack.amount)}
+                                                >
+                                                    Acheter
+                                                </Button>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                ))}
                             </div>
-                        </div>
-                    ))}
-                    {invoices.length > 5 && (
-                        <Button variant="outline" className="w-full" asChild>
-                            <a href="/billing/invoices">
-                                Voir toutes les factures
-                            </a>
-                        </Button>
+                        </CardContent>
+                    </Card>
+
+                    {/* Plans disponibles */}
+                    <Card className="mb-8">
+                        <CardHeader>
+                            <CardTitle>Changer de plan</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                {PLANS.map((plan) => (
+                                    <Card key={plan.id} className={`relative ${plan.popular ? 'border-blue-500' : ''} ${user.subscription_plan === plan.id ? 'bg-blue-50 border-blue-500' : ''}`}>
+                                        {plan.popular && (
+                                            <div className="absolute -top-2 left-1/2 transform -translate-x-1/2">
+                                                <Badge className="bg-blue-500 text-white">
+                                                    <Star className="h-3 w-3 mr-1" />
+                                                    Populaire
+                                                </Badge>
+                                            </div>
+                                        )}
+                                        <CardContent className="p-6">
+                                            <div className="text-center mb-4">
+                                                <h3 className="text-xl font-bold">{plan.name}</h3>
+                                                <div className="text-3xl font-bold text-blue-600 mt-2">
+                                                    {typeof plan.price === 'number' ? `${plan.price}€` : plan.price}
+                                                </div>
+                                                {typeof plan.price === 'number' && (
+                                                    <div className="text-sm text-gray-600">par mois</div>
+                                                )}
+                                                <div className="text-sm text-gray-600 mt-1">
+                                                    {plan.credits} crédits IA{typeof plan.credits === 'number' ? '/mois' : ''}
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-3 mb-6">
+                                                {plan.features.map((feature, index) => (
+                                                    <div key={index} className="flex items-center text-sm">
+                                                        <Check className="h-4 w-4 text-green-500 mr-2 flex-shrink-0" />
+                                                        <span>{feature}</span>
+                                                    </div>
+                                                ))}
+                                                {plan.limitations.map((limitation, index) => (
+                                                    <div key={index} className="flex items-center text-sm text-gray-500">
+                                                        <X className="h-4 w-4 text-red-500 mr-2 flex-shrink-0" />
+                                                        <span>{limitation}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            {user.subscription_plan === plan.id ? (
+                                                <Button disabled className="w-full">
+                                                    <Check className="h-4 w-4 mr-2" />
+                                                    Plan actuel
+                                                </Button>
+                                            ) : plan.id === 'enterprise' ? (
+                                                <Button variant="outline" className="w-full" asChild>
+                                                    <Link href="/contact">
+                                                        Nous contacter
+                                                    </Link>
+                                                </Button>
+                                            ) : (
+                                                <Button 
+                                                    className="w-full"
+                                                    onClick={() => handlePlanChange(plan.id)}
+                                                    disabled={isChangingPlan}
+                                                >
+                                                    {isChangingPlan && selectedPlan === plan.id ? (
+                                                        <>
+                                                            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                                            Changement...
+                                                        </>
+                                                    ) : (
+                                                        plan.price > (PLANS.find(p => p.id === user.subscription_plan)?.price || 0) ? 
+                                                        'Upgrader' : 'Changer'
+                                                    )}
+                                                </Button>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Factures */}
+                    <Card className="mb-8">
+                        <CardHeader>
+                            <CardTitle className="flex items-center">
+                                <Calendar className="h-5 w-5 mr-2" />
+                                Historique des factures
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            {invoices.length > 0 ? (
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Date</TableHead>
+                                            <TableHead>Description</TableHead>
+                                            <TableHead>Montant</TableHead>
+                                            <TableHead>Statut</TableHead>
+                                            <TableHead className="text-right">Actions</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {invoices.map((invoice) => (
+                                            <TableRow key={invoice.id}>
+                                                <TableCell>{formatDate(invoice.created_at)}</TableCell>
+                                                <TableCell>{invoice.description}</TableCell>
+                                                <TableCell className="font-medium">
+                                                    {formatAmount(invoice.amount, invoice.currency)}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Badge variant={invoice.status === 'paid' ? 'default' : 'destructive'}>
+                                                        {invoice.status === 'paid' ? 'Payée' : 'Impayée'}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <Button variant="outline" size="sm" asChild>
+                                                        <a href={invoice.download_url} target="_blank" rel="noopener noreferrer">
+                                                            <Download className="h-4 w-4 mr-2" />
+                                                            Télécharger
+                                                        </a>
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            ) : (
+                                <div className="text-center py-8">
+                                    <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                                    <p className="text-gray-600">Aucune facture disponible</p>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* Actions d'abonnement */}
+                    {user.subscription_plan !== 'basic' && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center text-red-600">
+                                    <Shield className="h-5 w-5 mr-2" />
+                                    Zone dangereuse
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="flex items-center justify-between p-4 border border-red-200 rounded-lg">
+                                    <div>
+                                        <h3 className="font-medium text-red-900">Annuler l'abonnement</h3>
+                                        <p className="text-sm text-red-700">
+                                            Vous conserverez l'accès jusqu'à la fin de votre période de facturation
+                                        </p>
+                                    </div>
+                                    <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                            <Button variant="destructive">
+                                                Annuler l'abonnement
+                                            </Button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                                <AlertDialogTitle>Annuler l'abonnement</AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                    Êtes-vous sûr de vouloir annuler votre abonnement ? 
+                                                    Vous conserverez l'accès aux fonctionnalités premium jusqu'à la fin de votre période de facturation,
+                                                    puis votre compte sera automatiquement rétrogradé au plan Basic.
+                                                </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                                <AlertDialogCancel>Garder l'abonnement</AlertDialogCancel>
+                                                <AlertDialogAction 
+                                                    onClick={handleCancelSubscription}
+                                                    className="bg-red-600 hover:bg-red-700"
+                                                >
+                                                    Confirmer l'annulation
+                                                </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
+                                </div>
+                            </CardContent>
+                        </Card>
                     )}
                 </div>
-            </CardContent>
-        </Card>
-    );
-};
-
-const SubscriptionManagement = ({ organization }: { organization: Organization }) => (
-    <Card>
-        <CardHeader>
-            <CardTitle className="flex items-center">
-                <Users className="h-5 w-5 mr-2" />
-                Gestion de l'abonnement
-            </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-            <div className="space-y-3">
-                <Button variant="outline" className="w-full justify-start" asChild>
-                    <a href="/billing/payment-methods">
-                        <CreditCard className="h-4 w-4 mr-2" />
-                        Moyens de paiement
-                    </a>
-                </Button>
-                <Button variant="outline" className="w-full justify-start" asChild>
-                    <a href="/billing/invoices">
-                        <Download className="h-4 w-4 mr-2" />
-                        Toutes les factures
-                    </a>
-                </Button>
-                <Button variant="outline" className="w-full justify-start" asChild>
-                    <a href="/billing/usage">
-                        <BarChart3 className="h-4 w-4 mr-2" />
-                        Utilisation détaillée
-                    </a>
-                </Button>
             </div>
-            
-            <Separator />
-            
-            {organization.subscription_plan !== 'basic' && (
-                <div className="text-center space-y-2">
-                    <p className="text-sm text-gray-600">Besoin d'aide ?</p>
-                    <Button variant="outline" size="sm" asChild>
-                        <a href="/billing/cancel">
-                            <AlertTriangle className="h-4 w-4 mr-2" />
-                            Annuler l'abonnement
-                        </a>
-                    </Button>
-                </div>
-            )}
-        </CardContent>
-    </Card>
-);
-
-export default function Billing() {
-    const { props } = usePage<PageProps>();
-    
-    // Protection contre les props manquantes avec des valeurs par défaut et vérification des types
-    const user = props.user || {} as User;
-    const organization = props.organization || {} as Organization;
-    const creditPacks = Array.isArray(props.credit_packs) ? props.credit_packs : [];
-    const plans = Array.isArray(props.plans) ? props.plans : [];
-    const invoices = Array.isArray(props.invoices) ? props.invoices : [];
-
-    // Vérification de sécurité supplémentaire
-    if (props.credit_packs && !Array.isArray(props.credit_packs)) {
-        console.error('Props credit_packs is not an array:', props.credit_packs);
-    }
-    if (props.plans && !Array.isArray(props.plans)) {
-        console.error('Props plans is not an array:', props.plans);
-    }
-    if (props.invoices && !Array.isArray(props.invoices)) {
-        console.error('Props invoices is not an array:', props.invoices);
-    }
-
-    // Vérification des données critiques
-    if (!user.id || !organization.id) {
-        throw new Error('Données utilisateur ou organisation manquantes');
-    }
-
-    // Sécurité pour les plans - marquer le plan actuel avec vérification
-    const plansWithCurrent = plans.length > 0 ? plans.map(plan => ({
-        ...plan,
-        current: plan.id === organization.subscription_plan
-    })) : [];
-
-    return (
-        <ErrorBoundary>
-            <AppLayout>
-                <Head title="Facturation" />
-                
-                <div className="space-y-6">
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-900">Facturation et abonnements</h1>
-                        <p className="text-gray-600 mt-2">
-                            Gérez votre abonnement, achetez des crédits et consultez vos factures
-                        </p>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Contenu principal */}
-                        <div className="lg:col-span-2 space-y-6">
-                            <CurrentSubscription organization={organization} />
-                            <CreditPacksSection packs={creditPacks} />
-                            <PlansSection plans={plansWithCurrent} currentPlan={organization.subscription_plan} />
-                            <InvoicesSection invoices={invoices} />
-                        </div>
-
-                        {/* Sidebar */}
-                        <div className="space-y-6">
-                            <SubscriptionManagement organization={organization} />
-                        </div>
-                    </div>
-                </div>
-            </AppLayout>
-        </ErrorBoundary>
+        </AppLayout>
     );
 } 

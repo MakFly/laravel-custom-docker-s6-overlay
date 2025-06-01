@@ -1,486 +1,338 @@
-import React, { useState } from 'react';
-import { Head, usePage } from '@inertiajs/react';
-import AppLayout from '@/layouts/app-layout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { 
-    AlertTriangle, 
-    Clock, 
-    Search, 
-    Filter,
-    MoreHorizontal,
-    Trash2,
-    X,
-    Calendar,
-    FileText,
-    Bell,
-    CheckCircle,
-    ExternalLink
-} from 'lucide-react';
-import { toast } from 'react-hot-toast';
-import { useDismissAlert, useSnoozeAlert, useDeleteAlert } from '@/hooks/useAlerts';
-import ErrorBoundary from '@/components/ErrorBoundary';
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { Head, Link, useForm, router } from '@inertiajs/react';
+import { Bell, AlertTriangle, CheckCircle, X, Play, Pause, Trash2, MessageSquare, Calendar } from 'lucide-react';
+import { useState } from 'react';
+
+interface User {
+    id: number;
+    name: string;
+    email: string;
+}
+
+interface Auth {
+    user: User;
+}
+
+interface Contract {
+    id: number;
+    title: string;
+    next_renewal_date: string;
+    amount: number;
+    status: string;
+}
 
 interface Alert {
     id: number;
     type: string;
-    type_label: string;
-    status: 'pending' | 'sent' | 'dismissed' | 'snoozed';
-    message: string;
-    scheduled_for: string;
-    snoozed_until?: string;
+    status: string;
+    trigger_days: number;
+    last_sent_at: string | null;
+    notification_channels: string[];
+    discord_webhook_url: string | null;
+    is_discord_enabled: boolean;
+    contract: Contract;
     created_at: string;
-    contract?: {
-        id: number;
-        title: string;
-    };
 }
 
-interface PageProps {
-    alerts: Alert[];
-    filters: {
-        search?: string;
-        type?: string;
-        status?: string;
-    };
-    stats: {
-        total: number;
-        pending: number;
-        sent: number;
-        dismissed: number;
-    };
+interface AlertStats {
+    total_alerts: number;
+    active_alerts: number;
+    sent_today: number;
 }
 
-const AlertTypeFilter = ({ value, onChange }: { value: string; onChange: (value: string) => void }) => (
-    <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Type d'alerte" />
-        </SelectTrigger>
-        <SelectContent>
-            <SelectItem value="all">Tous les types</SelectItem>
-            <SelectItem value="expiration">Expiration</SelectItem>
-            <SelectItem value="renewal">Renouvellement</SelectItem>
-            <SelectItem value="tacit_renewal">Reconduction tacite</SelectItem>
-            <SelectItem value="payment">Paiement</SelectItem>
-        </SelectContent>
-    </Select>
-);
-
-const AlertStatusFilter = ({ value, onChange }: { value: string; onChange: (value: string) => void }) => (
-    <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="Statut" />
-        </SelectTrigger>
-        <SelectContent>
-            <SelectItem value="all">Tous les statuts</SelectItem>
-            <SelectItem value="pending">En attente</SelectItem>
-            <SelectItem value="sent">Envoyées</SelectItem>
-            <SelectItem value="dismissed">Marquées comme lues</SelectItem>
-            <SelectItem value="snoozed">Reportées</SelectItem>
-        </SelectContent>
-    </Select>
-);
-
-const AlertActionDropdown = ({ alert, onSuccess }: { alert: Alert; onSuccess: () => void }) => {
-    const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-    const [snoozeDate, setSnoozeDate] = useState('');
-    
-    const dismissMutation = useDismissAlert();
-    const snoozeMutation = useSnoozeAlert();
-    const deleteMutation = useDeleteAlert();
-
-    const handleDismiss = async () => {
-        try {
-            await dismissMutation.mutateAsync({ id: alert.id });
-            toast.success('Alerte marquée comme lue');
-            onSuccess();
-        } catch (error: any) {
-            toast.error(error.message || 'Erreur lors de la suppression');
-        }
+interface AlertsProps {
+    auth: Auth;
+    alerts: {
+        data: Alert[];
+        links: any[];
+        meta: any;
     };
+    stats: AlertStats;
+}
 
-    const handleSnooze = async (snoozeUntil: string) => {
-        try {
-            await snoozeMutation.mutateAsync({ id: alert.id, until: snoozeUntil });
-            toast.success('Alerte reportée');
-            onSuccess();
-        } catch (error: any) {
-            toast.error(error.message || 'Erreur lors du report');
-        }
-    };
+export default function AlertsIndex({ auth, alerts, stats }: AlertsProps) {
+    const [testingAlert, setTestingAlert] = useState<number | null>(null);
+    const [sendingReport, setSendingReport] = useState(false);
 
-    const handleDelete = async () => {
-        try {
-            await deleteMutation.mutateAsync({ id: alert.id });
-            toast.success('Alerte supprimée');
-            setShowDeleteDialog(false);
-            onSuccess();
-        } catch (error: any) {
-            toast.error(error.message || 'Erreur lors de la suppression');
-        }
-    };
-
-    const getSnoozeOptions = () => {
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        
-        const nextWeek = new Date();
-        nextWeek.setDate(nextWeek.getDate() + 7);
-        
-        const nextMonth = new Date();
-        nextMonth.setMonth(nextMonth.getMonth() + 1);
-
-        return [
-            { label: 'Demain', value: tomorrow.toISOString().split('T')[0] },
-            { label: 'Dans 1 semaine', value: nextWeek.toISOString().split('T')[0] },
-            { label: 'Dans 1 mois', value: nextMonth.toISOString().split('T')[0] },
-        ];
-    };
-
-    return (
-        <>
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm">
-                        <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                    {alert.status === 'pending' && (
-                        <>
-                            <DropdownMenuItem 
-                                onClick={handleDismiss}
-                                disabled={dismissMutation.isPending}
-                            >
-                                <CheckCircle className="mr-2 h-4 w-4" />
-                                Marquer comme lu
-                            </DropdownMenuItem>
-                            
-                            {getSnoozeOptions().map((option) => (
-                                <DropdownMenuItem 
-                                    key={option.value}
-                                    onClick={() => handleSnooze(option.value)}
-                                    disabled={snoozeMutation.isPending}
-                                >
-                                    <Clock className="mr-2 h-4 w-4" />
-                                    Reporter à {option.label}
-                                </DropdownMenuItem>
-                            ))}
-                            
-                            <DropdownMenuSeparator />
-                        </>
-                    )}
-                    
-                    <DropdownMenuItem 
-                        onClick={() => setShowDeleteDialog(true)}
-                        className="text-red-600"
-                    >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Supprimer
-                    </DropdownMenuItem>
-                </DropdownMenuContent>
-            </DropdownMenu>
-
-            <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Supprimer l'alerte</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Êtes-vous sûr de vouloir supprimer cette alerte ? Cette action est irréversible.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Annuler</AlertDialogCancel>
-                        <AlertDialogAction 
-                            onClick={handleDelete}
-                            disabled={deleteMutation.isPending}
-                            className="bg-red-600 hover:bg-red-700"
-                        >
-                            {deleteMutation.isPending ? 'Suppression...' : 'Supprimer'}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-        </>
-    );
-};
-
-const AlertCard = ({ alert, onSuccess }: { alert: Alert; onSuccess: () => void }) => {
-    const getStatusBadge = (status: string) => {
-        switch (status) {
-            case 'pending':
-                return <Badge variant="destructive">En attente</Badge>;
-            case 'sent':
-                return <Badge variant="secondary">Envoyée</Badge>;
-            case 'dismissed':
-                return <Badge variant="outline">Lue</Badge>;
-            case 'snoozed':
-                return <Badge variant="outline" className="text-orange-600">Reportée</Badge>;
-            default:
-                return <Badge variant="outline">{status}</Badge>;
-        }
-    };
-
-    const getTypeIcon = (type: string) => {
-        switch (type) {
-            case 'expiration':
-                return <AlertTriangle className="h-4 w-4" />;
-            case 'renewal':
-                return <Calendar className="h-4 w-4" />;
-            case 'tacit_renewal':
-                return <Clock className="h-4 w-4" />;
-            case 'payment':
-                return <FileText className="h-4 w-4" />;
-            default:
-                return <Bell className="h-4 w-4" />;
-        }
-    };
-
-    const isOverdue = alert.status === 'pending' && new Date(alert.scheduled_for) < new Date();
-
-    return (
-        <Card className={`${isOverdue ? 'border-red-300 bg-red-50/30' : ''}`}>
-            <CardContent className="p-4">
-                <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                            {getTypeIcon(alert.type)}
-                            <Badge variant="outline" className="text-xs">
-                                {alert.type_label}
-                            </Badge>
-                            {getStatusBadge(alert.status)}
-                            {isOverdue && (
-                                <Badge variant="destructive" className="text-xs">
-                                    En retard
-                                </Badge>
-                            )}
-                        </div>
-                        
-                        <div className="space-y-2">
-                            <p className="font-medium text-gray-900">
-                                {alert.message}
-                            </p>
-                            
-                            {alert.contract && (
-                                <div className="flex items-center gap-2 text-sm text-gray-600">
-                                    <FileText className="h-3 w-3" />
-                                    <a 
-                                        href={`/contracts/${alert.contract.id}`}
-                                        className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                                    >
-                                        {alert.contract.title}
-                                        <ExternalLink className="h-3 w-3" />
-                                    </a>
-                                </div>
-                            )}
-                            
-                            <div className="flex items-center gap-4 text-xs text-gray-500">
-                                <div className="flex items-center gap-1">
-                                    <Calendar className="h-3 w-3" />
-                                    Programmé pour : {new Date(alert.scheduled_for).toLocaleDateString('fr-FR')}
-                                </div>
-                                {alert.snoozed_until && (
-                                    <div className="flex items-center gap-1">
-                                        <Clock className="h-3 w-3" />
-                                        Reporté jusqu'au : {new Date(alert.snoozed_until).toLocaleDateString('fr-FR')}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <AlertActionDropdown alert={alert} onSuccess={onSuccess} />
-                </div>
-            </CardContent>
-        </Card>
-    );
-};
-
-const AlertsStats = ({ stats }: { stats: PageProps['stats'] }) => (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <Card>
-            <CardContent className="p-4">
-                <div className="flex items-center">
-                    <div className="rounded-full p-2 bg-blue-100">
-                        <Bell className="h-4 w-4 text-blue-600" />
-                    </div>
-                    <div className="ml-3">
-                        <p className="text-sm font-medium text-gray-600">Total</p>
-                        <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
-        
-        <Card>
-            <CardContent className="p-4">
-                <div className="flex items-center">
-                    <div className="rounded-full p-2 bg-red-100">
-                        <Clock className="h-4 w-4 text-red-600" />
-                    </div>
-                    <div className="ml-3">
-                        <p className="text-sm font-medium text-gray-600">En attente</p>
-                        <p className="text-2xl font-bold text-gray-900">{stats.pending}</p>
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
-        
-        <Card>
-            <CardContent className="p-4">
-                <div className="flex items-center">
-                    <div className="rounded-full p-2 bg-green-100">
-                        <CheckCircle className="h-4 w-4 text-green-600" />
-                    </div>
-                    <div className="ml-3">
-                        <p className="text-sm font-medium text-gray-600">Envoyées</p>
-                        <p className="text-2xl font-bold text-gray-900">{stats.sent}</p>
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
-        
-        <Card>
-            <CardContent className="p-4">
-                <div className="flex items-center">
-                    <div className="rounded-full p-2 bg-gray-100">
-                        <X className="h-4 w-4 text-gray-600" />
-                    </div>
-                    <div className="ml-3">
-                        <p className="text-sm font-medium text-gray-600">Traitées</p>
-                        <p className="text-2xl font-bold text-gray-900">{stats.dismissed}</p>
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
-    </div>
-);
-
-export default function AlertsIndex() {
-    const { props } = usePage<PageProps>();
-    
-    // Protection contre les props manquantes avec vérification du type
-    const alerts = Array.isArray(props.alerts) ? props.alerts : [];
-    const filters = props.filters || {};
-    const stats = props.stats || { total: 0, pending: 0, sent: 0, dismissed: 0 };
-
-    // Vérification de sécurité supplémentaire
-    if (props.alerts && !Array.isArray(props.alerts)) {
-        console.error('Props alerts is not an array:', props.alerts);
-    }
-
-    const [searchTerm, setSearchTerm] = useState(filters.search || '');
-    const [typeFilter, setTypeFilter] = useState(filters.type || 'all');
-    const [statusFilter, setStatusFilter] = useState(filters.status || 'all');
-
-    const handleSuccess = () => {
-        // Les mutations React Query invalident automatiquement le cache
-        // Ici on pourrait forcer un reload de la page si nécessaire
-        window.location.reload();
-    };
-
-    // Filtrage côté client pour l'instant
-    const filteredAlerts = alerts.filter(alert => {
-        const matchesSearch = !searchTerm || 
-            alert.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            alert.type_label.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (alert.contract?.title || '').toLowerCase().includes(searchTerm.toLowerCase());
-        
-        const matchesType = typeFilter === 'all' || alert.type === typeFilter;
-        const matchesStatus = statusFilter === 'all' || alert.status === statusFilter;
-        
-        return matchesSearch && matchesType && matchesStatus;
+    const { data, setData, post, processing } = useForm({
+        contract_id: '',
+        type: 'renewal',
+        trigger_days: 30,
+        notification_channels: ['email'],
+        is_discord_enabled: false,
+        discord_webhook_url: '',
     });
 
+    const formatDate = (dateString: string) => {
+        return new Date(dateString).toLocaleDateString('fr-FR');
+    };
+
+    const formatCurrency = (amount: number) => {
+        return new Intl.NumberFormat('fr-FR', {
+            style: 'currency',
+            currency: 'EUR'
+        }).format(amount);
+    };
+
+    const getStatusBadge = (status: string) => {
+        const baseClasses = "px-2 py-1 rounded-full text-xs font-medium";
+        switch (status) {
+            case 'pending':
+                return `${baseClasses} bg-yellow-100 text-yellow-800`;
+            case 'sent':
+                return `${baseClasses} bg-green-100 text-green-800`;
+            case 'failed':
+                return `${baseClasses} bg-red-100 text-red-800`;
+            default:
+                return `${baseClasses} bg-gray-100 text-gray-800`;
+        }
+    };
+
+    const getTypeLabel = (type: string) => {
+        switch (type) {
+            case 'renewal_warning':
+                return 'Avertissement renouvellement';
+            case 'notice_deadline':
+                return 'Échéance préavis';
+            case 'contract_expired':
+                return 'Contrat expiré';
+            default:
+                return type;
+        }
+    };
+
+    const testDiscordAlert = async (alertId: number) => {
+        setTestingAlert(alertId);
+        try {
+            const response = await fetch(`/alerts/${alertId}/test-discord`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                alert('Test Discord envoyé avec succès !');
+            } else {
+                alert('Erreur lors de l\'envoi du test Discord');
+            }
+        } catch (error) {
+            alert('Erreur lors de l\'envoi du test Discord');
+        } finally {
+            setTestingAlert(null);
+        }
+    };
+
+    const toggleAlertStatus = async (alertId: number) => {
+        try {
+            const response = await fetch(`/alerts/${alertId}/toggle-status`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+            });
+            
+            if (response.ok) {
+                router.reload();
+            }
+        } catch (error) {
+            alert('Erreur lors de la mise à jour du statut');
+        }
+    };
+
+    const sendMonthlyReport = async () => {
+        setSendingReport(true);
+        try {
+            const response = await fetch('/alerts/monthly-report', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                alert('Rapport mensuel envoyé avec succès !');
+            } else {
+                alert('Erreur lors de l\'envoi du rapport mensuel');
+            }
+        } catch (error) {
+            alert('Erreur lors de l\'envoi du rapport mensuel');
+        } finally {
+            setSendingReport(false);
+        }
+    };
+
+    const deleteAlert = (alertId: number) => {
+        if (confirm('Êtes-vous sûr de vouloir supprimer cette alerte ?')) {
+            router.delete(`/alerts/${alertId}`);
+        }
+    };
+
     return (
-        <ErrorBoundary>
-            <AppLayout>
-                <Head title="Alertes" />
-                
-                <div className="space-y-6">
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-900">Alertes</h1>
-                        <p className="text-gray-600 mt-2">
-                            Gérez vos alertes de contrats et notifications importantes
-                        </p>
+        <AuthenticatedLayout 
+            user={auth.user} 
+            header={<h2 className="text-xl leading-tight font-semibold text-gray-800">Gestion des Alertes</h2>}
+        >
+            <Head title="Alertes" />
+
+            <div className="py-12">
+                <div className="mx-auto max-w-7xl sm:px-6 lg:px-8">
+                    {/* Stats Cards */}
+                    <div className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-3">
+                        <div className="rounded-lg bg-white p-6 shadow-sm border-l-4 border-blue-500">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-2xl font-bold text-blue-600">{stats.total_alerts}</div>
+                                    <div className="text-gray-600">Total alertes</div>
+                                </div>
+                                <Bell className="w-8 h-8 text-blue-500" />
+                            </div>
+                        </div>
+                        
+                        <div className="rounded-lg bg-white p-6 shadow-sm border-l-4 border-green-500">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-2xl font-bold text-green-600">{stats.active_alerts}</div>
+                                    <div className="text-gray-600">Alertes actives</div>
+                                </div>
+                                <CheckCircle className="w-8 h-8 text-green-500" />
+                            </div>
+                        </div>
+                        
+                        <div className="rounded-lg bg-white p-6 shadow-sm border-l-4 border-orange-500">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-2xl font-bold text-orange-600">{stats.sent_today}</div>
+                                    <div className="text-gray-600">Envoyées aujourd'hui</div>
+                                </div>
+                                <Calendar className="w-8 h-8 text-orange-500" />
+                            </div>
+                        </div>
                     </div>
 
-                    <AlertsStats stats={stats} />
+                    {/* Actions */}
+                    <div className="mb-6 flex gap-4">
+                        <button
+                            onClick={sendMonthlyReport}
+                            disabled={sendingReport}
+                            className="rounded-md bg-indigo-600 px-4 py-2 text-white transition hover:bg-indigo-700 disabled:opacity-50"
+                        >
+                            <MessageSquare className="w-4 h-4 inline mr-2" />
+                            {sendingReport ? 'Envoi...' : 'Envoyer rapport mensuel Discord'}
+                        </button>
+                    </div>
 
-                    {/* Filtres */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center">
-                                <Filter className="h-5 w-5 mr-2" />
-                                Filtres
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="flex flex-col sm:flex-row gap-4">
-                                <div className="flex-1">
-                                    <div className="relative">
-                                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                                        <Input
-                                            placeholder="Rechercher dans les alertes..."
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
-                                            className="pl-10"
-                                        />
-                                    </div>
-                                </div>
-                                <AlertTypeFilter value={typeFilter} onChange={setTypeFilter} />
-                                <AlertStatusFilter value={statusFilter} onChange={setStatusFilter} />
+                    {/* Alerts List */}
+                    <div className="overflow-hidden bg-white shadow-sm sm:rounded-lg">
+                        <div className="p-6 border-b border-gray-200">
+                            <h3 className="text-lg font-semibold flex items-center">
+                                <AlertTriangle className="w-5 h-5 mr-2 text-orange-500" />
+                                Alertes configurées
+                            </h3>
+                        </div>
+                        
+                        {alerts.data.length > 0 ? (
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Contrat
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Type
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Statut
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Déclenchement
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Dernière notification
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Actions
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {alerts.data.map((alert) => (
+                                            <tr key={alert.id} className="hover:bg-gray-50">
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div>
+                                                        <div className="font-medium text-gray-900">{alert.contract.title}</div>
+                                                        <div className="text-sm text-gray-500">
+                                                            {formatCurrency(alert.contract.amount)} • 
+                                                            Expire le {formatDate(alert.contract.next_renewal_date)}
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span className="text-sm text-gray-900">
+                                                        {getTypeLabel(alert.type)}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span className={getStatusBadge(alert.status)}>
+                                                        {alert.status === 'pending' ? 'En attente' : 
+                                                         alert.status === 'sent' ? 'Envoyé' : 'Échec'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                    {alert.trigger_days} jour(s) avant
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                    {alert.last_sent_at ? formatDate(alert.last_sent_at) : 'Jamais'}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                                    <div className="flex gap-2">
+                                                        {alert.is_discord_enabled && (
+                                                            <button
+                                                                onClick={() => testDiscordAlert(alert.id)}
+                                                                disabled={testingAlert === alert.id}
+                                                                className="text-blue-600 hover:text-blue-900 disabled:opacity-50"
+                                                                title="Tester Discord"
+                                                            >
+                                                                <MessageSquare className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        <button
+                                                            onClick={() => toggleAlertStatus(alert.id)}
+                                                            className={`${alert.status === 'pending' ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'}`}
+                                                            title={alert.status === 'pending' ? 'Désactiver' : 'Activer'}
+                                                        >
+                                                            {alert.status === 'pending' ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => deleteAlert(alert.id)}
+                                                            className="text-red-600 hover:text-red-900"
+                                                            title="Supprimer"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Liste des alertes */}
-                    <div className="space-y-4">
-                        {filteredAlerts.length === 0 ? (
-                            <Card>
-                                <CardContent className="p-8 text-center">
-                                    <Bell className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                                    <h3 className="text-lg font-medium text-gray-900 mb-2">
-                                        Aucune alerte trouvée
-                                    </h3>
-                                    <p className="text-gray-600">
-                                        {alerts.length === 0 
-                                            ? "Vous n'avez aucune alerte pour le moment."
-                                            : "Aucune alerte ne correspond aux filtres sélectionnés."
-                                        }
-                                    </p>
-                                </CardContent>
-                            </Card>
                         ) : (
-                            <div className="space-y-3">
-                                {filteredAlerts.map((alert) => (
-                                    <AlertCard key={alert.id} alert={alert} onSuccess={handleSuccess} />
-                                ))}
+                            <div className="p-8 text-center text-gray-500">
+                                <Bell className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                                <p>Aucune alerte configurée</p>
+                                <p className="text-sm mt-2">Les alertes sont créées automatiquement lors de l'ajout de contrats.</p>
                             </div>
                         )}
                     </div>
                 </div>
-            </AppLayout>
-        </ErrorBoundary>
+            </div>
+        </AuthenticatedLayout>
     );
 } 
