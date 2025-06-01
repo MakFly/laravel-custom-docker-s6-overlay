@@ -72,36 +72,47 @@ export function ProcessingStatus({
 
   // Déterminer le vrai statut AI en fonction du contexte
   const getEffectiveAiStatus = () => {
-    // Maintenant aiStatus devrait toujours être défini grâce à ContractResource
-    // Mais on garde la logique de fallback au cas oùma
-    if (!aiStatus) {
-      if (ocrStatus === 'failed') {
-        return 'failed';
-      } else if (ocrStatus === 'completed' && !hasAiAnalysis) {
-        return 'pending';
-      } else if (ocrStatus === 'processing' || ocrStatus === 'pending') {
-        return 'pending'; // Afficher pending même si OCR en cours
-      }
+    // Si l'IA a un statut explicite, l'utiliser
+    if (aiStatus) {
+      return aiStatus;
+    }
+    
+    // Sinon, déduire le statut en fonction de l'OCR
+    if (ocrStatus === 'failed') {
+      return 'failed'; // Si OCR échoue, IA ne peut pas fonctionner
+    } else if (ocrStatus === 'completed' && !hasAiAnalysis) {
+      return 'pending';
+    } else if (ocrStatus === 'processing' || ocrStatus === 'pending') {
       return 'pending';
     }
-    return aiStatus;
+    return 'pending';
   };
 
   const effectiveAiStatus = getEffectiveAiStatus();
 
+  // Détecter si tout est en échec pour le style spécial
+  const isCompleteFailure = ocrStatus === 'failed' && effectiveAiStatus === 'failed';
+
   return (
-    <Card className={cn("", className)}>
+    <Card className={cn("", isCompleteFailure && "border-red-200 bg-red-50", className)}>
       <CardContent className="p-4">
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-gray-900">État du traitement</h3>
-            {isPolling && (
-              <Badge variant="outline" className="text-xs">
-                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                Actualisation...
-              </Badge>
-            )}
-          </div>
+                  <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className={cn("text-sm font-medium", isCompleteFailure ? "text-red-900" : "text-gray-900")}>
+                État du traitement
+                {isCompleteFailure && (
+                  <span className="ml-2 text-red-600">
+                    <XCircle className="h-4 w-4 inline" />
+                  </span>
+                )}
+              </h3>
+              {isPolling && (
+                <Badge variant="outline" className="text-xs">
+                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  Actualisation...
+                </Badge>
+              )}
+            </div>
           
           <div className="space-y-2">
             {/* OCR Status */}

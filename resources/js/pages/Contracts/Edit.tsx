@@ -7,25 +7,37 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { AlertCircle } from 'lucide-react';
 import { ArrowLeft, Save, AlertTriangle, FileText } from 'lucide-react';
-import { Link } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
+import { toast } from 'react-hot-toast';
 
-interface Contract {
+interface ContractData {
     id: number;
     title: string;
     type: 'pro' | 'perso';
     category: string;
     status: string;
+    status_color: string;
     ocr_status: 'pending' | 'processing' | 'completed' | 'failed';
     ai_status: 'pending' | 'processing' | 'completed' | 'failed';
     file_original_name: string;
     amount: number;
     currency: string;
-    start_date?: string;
-    end_date?: string;
-    next_renewal_date?: string;
+    start_date: string | null;
+    end_date: string | null;
+    next_renewal_date: string | null;
     notice_period_days: number;
     is_tacit_renewal: boolean;
+    is_expiring: boolean;
+    days_until_renewal: number | null;
+    has_ocr_text: boolean;
+    ocr_text_length: number;
+    has_ai_analysis: boolean;
+    ai_analysis: any;
+    alert_type: string | null;
+    needs_alert: boolean;
     created_at: string;
     updated_at: string;
     user?: {
@@ -33,36 +45,83 @@ interface Contract {
         name: string;
         email: string;
     };
+    links?: {
+        self: string;
+        download: string;
+        view: string;
+        reprocess: string;
+        analysis: string;
+        ocr_text: string;
+    };
 }
 
 interface EditProps {
-    contract: Contract;
+    contract: {
+        data: ContractData;
+        meta?: any;
+    };
 }
 
-const formatDate = (dateString?: string) => {
+const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return '';
     return new Date(dateString).toISOString().split('T')[0];
 };
 
+// Composant d'erreur réutilisable
+const ErrorMessage = ({ message }: { message: string }) => (
+    <div className="flex items-center mt-1 text-sm text-red-600">
+        <AlertCircle className="w-4 h-4 mr-1" />
+        {message}
+    </div>
+);
+
 export default function Edit({ contract }: EditProps) {
+    // Debug : vérifier si le contrat a un ID
+    console.log('Contract ID:', contract.data.id, 'Contract:', contract.data);
+    console.log('Props reçues:', { contract });
+    console.log('contract keys:', Object.keys(contract || {}));
+    
+    // Si pas d'ID, afficher une erreur 
+    if (!contract.data.id) {
+        console.error('ERREUR: Contrat sans ID reçu!', contract);
+        return <div className="flex items-center justify-center p-8">
+            <ErrorMessage message="Erreur: Contrat non trouvé" />
+        </div>;
+    }
+    
     const { data, setData, put, processing, errors, isDirty } = useForm({
-        title: contract.title || '',
-        type: contract.type || 'perso',
-        category: contract.category || 'autre',
-        status: contract.status || 'active',
-        amount: contract.amount || 0,
-        start_date: formatDate(contract.start_date),
-        end_date: formatDate(contract.end_date),
-        next_renewal_date: formatDate(contract.next_renewal_date),
-        notice_period_days: contract.notice_period_days || 30,
-        is_tacit_renewal: contract.is_tacit_renewal || false,
+        title: contract.data.title || '',
+        type: contract.data.type || 'perso',
+        category: contract.data.category || 'autre',
+        status: contract.data.status || 'active',
+        amount: contract.data.amount || 0,
+        start_date: formatDate(contract.data.start_date),
+        end_date: formatDate(contract.data.end_date),
+        next_renewal_date: formatDate(contract.data.next_renewal_date),
+        notice_period_days: contract.data.notice_period_days || 30,
+        is_tacit_renewal: contract.data.is_tacit_renewal || false,
     });
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        put(route('contracts.update', contract.id), {
+        
+        // Vérification de sécurité renforcée
+        const contractId = contract.data.id;
+        if (!contractId) {
+            console.error('ID du contrat manquant dans handleSubmit:', { contract, contractId });
+            toast.error('Erreur : ID du contrat manquant');
+            return;
+        }
+        
+        // Utiliser l'URL directe au lieu de route() pour éviter Ziggy
+        put(`/contracts/${contractId}`, {
             onSuccess: () => {
-                // Redirection automatique par Inertia après succès
+                toast.success('Contrat mis à jour avec succès !');
+                router.visit(`/contracts/${contractId}`);
+            },
+            onError: (errors) => {
+                console.error('Erreurs de validation:', errors);
+                toast.error('Erreur lors de la mise à jour du contrat');
             },
         });
     };
@@ -80,7 +139,7 @@ export default function Edit({ contract }: EditProps) {
 
     return (
         <AppLayout>
-            <Head title={`Modifier ${contract.title}`} />
+            <Head title={`Modifier ${contract.data.title}`} />
 
             <div className="py-12">
                 <div className="max-w-4xl mx-auto sm:px-6 lg:px-8">
@@ -88,7 +147,7 @@ export default function Edit({ contract }: EditProps) {
                     <div className="mb-8">
                         <div className="flex items-center justify-between">
                             <Link
-                                href={route('contracts.show', contract.id)}
+                                href={`/contracts/${contract.data.id || ''}`}
                                 className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700"
                             >
                                 <ArrowLeft className="w-4 h-4 mr-1" />
@@ -103,12 +162,12 @@ export default function Edit({ contract }: EditProps) {
                             <div className="mt-2 flex items-center space-x-4">
                                 <div className="flex items-center space-x-2">
                                     <FileText className="w-4 h-4 text-gray-400" />
-                                    <span className="text-sm text-gray-600">{contract.file_original_name}</span>
+                                    <span className="text-sm text-gray-600">{contract.data.file_original_name}</span>
                                 </div>
-                                <Badge variant={contract.type === 'pro' ? 'default' : 'secondary'}>
-                                    {contract.type === 'pro' ? 'Professionnel' : 'Personnel'}
+                                <Badge variant={contract.data.type === 'pro' ? 'default' : 'secondary'}>
+                                    {contract.data.type === 'pro' ? 'Professionnel' : 'Personnel'}
                                 </Badge>
-                                {contract.is_tacit_renewal && (
+                                {contract.data.is_tacit_renewal && (
                                     <Badge variant="destructive">
                                         <AlertTriangle className="w-3 h-3 mr-1" />
                                         Reconduction tacite
@@ -137,10 +196,9 @@ export default function Edit({ contract }: EditProps) {
                                             onChange={(e) => setData('title', e.target.value)}
                                             className={errors.title ? 'border-red-300' : ''}
                                             placeholder="Nom du contrat"
+                                            required
                                         />
-                                        {errors.title && (
-                                            <p className="text-red-600 text-sm">{errors.title}</p>
-                                        )}
+                                        {errors.title && <ErrorMessage message={errors.title} />}
                                     </div>
 
                                     <div className="space-y-2">
@@ -148,6 +206,7 @@ export default function Edit({ contract }: EditProps) {
                                         <Select
                                             value={data.type}
                                             onValueChange={(value: 'pro' | 'perso') => setData('type', value)}
+                                            required
                                         >
                                             <SelectTrigger className={errors.type ? 'border-red-300' : ''}>
                                                 <SelectValue placeholder="Sélectionner le type" />
@@ -157,9 +216,7 @@ export default function Edit({ contract }: EditProps) {
                                                 <SelectItem value="perso">Personnel</SelectItem>
                                             </SelectContent>
                                         </Select>
-                                        {errors.type && (
-                                            <p className="text-red-600 text-sm">{errors.type}</p>
-                                        )}
+                                        {errors.type && <ErrorMessage message={errors.type} />}
                                     </div>
 
                                     <div className="space-y-2">
@@ -223,9 +280,7 @@ export default function Edit({ contract }: EditProps) {
                                             className={errors.amount ? 'border-red-300' : ''}
                                             placeholder="0.00"
                                         />
-                                        {errors.amount && (
-                                            <p className="text-red-600 text-sm">{errors.amount}</p>
-                                        )}
+                                        {errors.amount && <ErrorMessage message={errors.amount} />}
                                     </div>
 
                                     <div className="space-y-2">
@@ -239,21 +294,17 @@ export default function Edit({ contract }: EditProps) {
                                             className={errors.notice_period_days ? 'border-red-300' : ''}
                                             placeholder="30"
                                         />
-                                        {errors.notice_period_days && (
-                                            <p className="text-red-600 text-sm">{errors.notice_period_days}</p>
-                                        )}
+                                        {errors.notice_period_days && <ErrorMessage message={errors.notice_period_days} />}
                                     </div>
                                 </div>
 
                                 <div className="flex items-center space-x-2">
-                                    <input
-                                        type="checkbox"
+                                    <Checkbox
                                         id="is_tacit_renewal"
                                         checked={data.is_tacit_renewal}
-                                        onChange={(e) => setData('is_tacit_renewal', e.target.checked)}
-                                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                        onCheckedChange={(checked) => setData('is_tacit_renewal', checked as boolean)}
                                     />
-                                    <Label htmlFor="is_tacit_renewal" className="flex items-center space-x-2">
+                                    <Label htmlFor="is_tacit_renewal" className="flex items-center space-x-2 cursor-pointer">
                                         <span>Reconduction tacite</span>
                                         <AlertTriangle className="w-4 h-4 text-orange-500" />
                                     </Label>
@@ -280,9 +331,7 @@ export default function Edit({ contract }: EditProps) {
                                             onChange={(e) => setData('start_date', e.target.value)}
                                             className={errors.start_date ? 'border-red-300' : ''}
                                         />
-                                        {errors.start_date && (
-                                            <p className="text-red-600 text-sm">{errors.start_date}</p>
-                                        )}
+                                        {errors.start_date && <ErrorMessage message={errors.start_date} />}
                                     </div>
 
                                     <div className="space-y-2">
@@ -294,9 +343,7 @@ export default function Edit({ contract }: EditProps) {
                                             onChange={(e) => setData('end_date', e.target.value)}
                                             className={errors.end_date ? 'border-red-300' : ''}
                                         />
-                                        {errors.end_date && (
-                                            <p className="text-red-600 text-sm">{errors.end_date}</p>
-                                        )}
+                                        {errors.end_date && <ErrorMessage message={errors.end_date} />}
                                     </div>
 
                                     <div className="space-y-2">
@@ -308,9 +355,7 @@ export default function Edit({ contract }: EditProps) {
                                             onChange={(e) => setData('next_renewal_date', e.target.value)}
                                             className={errors.next_renewal_date ? 'border-red-300' : ''}
                                         />
-                                        {errors.next_renewal_date && (
-                                            <p className="text-red-600 text-sm">{errors.next_renewal_date}</p>
-                                        )}
+                                        {errors.next_renewal_date && <ErrorMessage message={errors.next_renewal_date} />}
                                     </div>
                                 </div>
                             </CardContent>
@@ -318,20 +363,23 @@ export default function Edit({ contract }: EditProps) {
 
                         {/* Actions */}
                         <div className="flex items-center justify-between">
-                            <Link
-                                href={route('contracts.show', contract.id)}
-                                className="text-sm text-gray-500 hover:text-gray-700"
+                            <Button 
+                                variant="outline" 
+                                asChild
+                                disabled={processing}
                             >
-                                Annuler
-                            </Link>
+                                <Link href={`/contracts/${contract.data.id || ''}`}>
+                                    Annuler
+                                </Link>
+                            </Button>
 
                             <div className="flex items-center space-x-3">
                                 {isDirty && (
-                                    <span className="text-sm text-orange-600">
-                                        Modifications non sauvegardées
+                                    <span className="text-sm text-orange-600 font-medium">
+                                        • Modifications non sauvegardées
                                     </span>
                                 )}
-                                <Button type="submit" disabled={processing}>
+                                <Button type="submit" disabled={processing || !isDirty}>
                                     <Save className="w-4 h-4 mr-2" />
                                     {processing ? 'Enregistrement...' : 'Enregistrer les modifications'}
                                 </Button>

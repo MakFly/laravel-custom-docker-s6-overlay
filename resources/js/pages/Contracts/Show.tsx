@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Toaster, toast } from 'react-hot-toast';
@@ -183,7 +183,11 @@ export default function Show({ contract: initialContractResponse }: ShowProps) {
     
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [showForceConfirm, setShowForceConfirm] = useState(false);
+    const [wasInTotalFailure, setWasInTotalFailure] = useState(
+        initialContract.ocr_status === 'failed' && initialContract.ai_status === 'failed'
+    );
     const queryClient = useQueryClient();
+    const prevStatusRef = useRef<{ocr: string, ai: string} | null>(null);
     
     // Hook pour le polling des statuts OCR/AI si nécessaire
     const { status: liveStatus, isPolling, forceStartPolling } = useContractStatus({
@@ -207,9 +211,6 @@ export default function Show({ contract: initialContractResponse }: ShowProps) {
     // Hook pour les actions de retraitement
     const { isProcessing, reprocessOCR, reprocessAI } = useContractActions({
         contractId: initialContract.id,
-        onSuccess: () => {
-            handleRefresh();
-        },
         onStartPolling: () => {
             forceStartPolling(); // Forcer le démarrage du polling après retraitement
         }
@@ -245,13 +246,39 @@ export default function Show({ contract: initialContractResponse }: ShowProps) {
             const ocrDone = ['completed', 'failed', 'not_applicable'].includes(liveStatus.ocr_status);
             const aiDone = ['completed', 'failed', 'not_applicable', 'awaiting_ocr'].includes(liveStatus.ai_status);
             
+            // Détecter les changements de statut pour afficher les toasts
+            if (prevStatusRef.current) {
+                // Toast pour OCR
+                if (prevStatusRef.current.ocr === 'processing' && liveStatus.ocr_status === 'completed') {
+                    toast.success('✅ Extraction de texte réussie !');
+                } else if (prevStatusRef.current.ocr === 'processing' && liveStatus.ocr_status === 'failed') {
+                    toast.error('❌ Échec de l\'extraction de texte');
+                }
+                
+                // Toast pour IA
+                if (prevStatusRef.current.ai === 'processing' && liveStatus.ai_status === 'completed') {
+                    toast.success('🧠 Analyse IA terminée avec succès !');
+                } else if (prevStatusRef.current.ai === 'processing' && liveStatus.ai_status === 'failed') {
+                    toast.error('❌ Échec de l\'analyse IA');
+                }
+            }
+            
+            // Mettre à jour la référence
+            prevStatusRef.current = { ocr: liveStatus.ocr_status, ai: liveStatus.ai_status };
+            
+            // Si on était en échec total et maintenant tout est réussi, on peut réinitialiser
+            if (wasInTotalFailure && liveStatus.ocr_status === 'completed' && liveStatus.ai_status === 'completed') {
+                setWasInTotalFailure(false);
+                toast.success('🎉 Contrat entièrement traité !');
+            }
+            
             if (ocrDone && aiDone && !isPolling) {
                 // Les jobs sont terminés et le polling s'est arrêté, invalider le cache et refetch
                 queryClient.invalidateQueries({ queryKey: ['contracts', initialContract.id] });
                 refetch();
             }
         }
-    }, [liveStatus, isPolling, queryClient, initialContract.id, refetch]);
+    }, [liveStatus, isPolling, queryClient, initialContract.id, refetch, wasInTotalFailure]);
 
     const handleRefresh = async () => {
         setIsRefreshing(true);
@@ -502,8 +529,69 @@ export default function Show({ contract: initialContractResponse }: ShowProps) {
                                 isPolling={isPolling}
                             />
 
+                            {/* Interface spéciale pour échec total */}
+                            {((contractWithLiveStatus.ocr_status === 'failed' && contractWithLiveStatus.ai_status === 'failed') || wasInTotalFailure) && (
+                                <Card className="border-red-200 bg-red-50">
+                                    <CardHeader className="pb-4">
+                                        <CardTitle className="text-lg font-semibold text-red-800 flex items-center">
+                                            <AlertTriangle className="h-5 w-5 mr-2" />
+                                            Échec du traitement automatique
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="space-y-4">
+                                            <div className="bg-white rounded-lg p-4 border border-red-200">
+                                                <h4 className="font-medium text-red-900 mb-2">Que s'est-il passé ?</h4>
+                                                <ul className="text-sm text-red-800 space-y-1 ml-4 list-disc">
+                                                    <li>L'extraction de texte (OCR) a échoué - le document n'est peut-être pas lisible</li>
+                                                    <li>L'analyse IA n'a pas pu être effectuée sans texte extrait</li>
+                                                    <li>Les informations du contrat doivent être saisies manuellement</li>
+                                                </ul>
+                                            </div>
+                                            
+                                            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                                                <h4 className="font-medium text-blue-900 mb-3">Solutions recommandées :</h4>
+                                                <div className="space-y-3">
+                                                    <Button 
+                                                        variant="outline" 
+                                                        onClick={reprocessOCR}
+                                                        disabled={isProcessing.ocr}
+                                                        className="w-full justify-start"
+                                                    >
+                                                        <RotateCcw className={`h-4 w-4 mr-2 ${isProcessing.ocr ? 'animate-spin' : ''}`} />
+                                                        {isProcessing.ocr ? 'Extraction en cours...' : 'Retenter l\'extraction de texte'}
+                                                    </Button>
+                                                    
+                                                    <Button 
+                                                        variant="default" 
+                                                        asChild
+                                                        className="w-full"
+                                                    >
+                                                        <Link href={contractWithLiveStatus.urls.edit}>
+                                                            <Edit className="h-4 w-4 mr-2" />
+                                                            Saisir les informations manuellement
+                                                        </Link>
+                                                    </Button>
+                                                </div>
+                                            </div>
+
+                                            <div className="text-xs text-gray-600 bg-white rounded p-3 border">
+                                                <p className="font-medium mb-1">💡 Conseils pour éviter les échecs :</p>
+                                                <ul className="space-y-1 ml-4 list-disc">
+                                                    <li>Utilisez des PDF de bonne qualité (pas de scan flou)</li>
+                                                    <li>Évitez les documents avec des polices très petites</li>
+                                                    <li>Les images de documents sont moins fiables que les PDF natifs</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )}
+
                             {/* Actions de retraitement */}
-                            {(contractWithLiveStatus.permissions.can_reprocess_ocr || contractWithLiveStatus.permissions.can_reprocess_ai) && (
+                            {(contractWithLiveStatus.permissions.can_reprocess_ocr || contractWithLiveStatus.permissions.can_reprocess_ai) && 
+                             !((contractWithLiveStatus.ocr_status === 'failed' && contractWithLiveStatus.ai_status === 'failed') || wasInTotalFailure) && 
+                             !(isProcessing.ocr || isProcessing.ai) && (
                                 <Card className="border-gray-200">
                                     <CardHeader className="pb-4">
                                         <CardTitle className="text-lg font-semibold">Actions de retraitement</CardTitle>
@@ -582,7 +670,8 @@ export default function Show({ contract: initialContractResponse }: ShowProps) {
                             )}
 
                             {/* Analyse complète - Pattern + IA */}
-                            {(currentContract as any)?.analysis && (
+                            {(currentContract as any)?.analysis && 
+                             !((contractWithLiveStatus.ocr_status === 'failed' && contractWithLiveStatus.ai_status === 'failed') || wasInTotalFailure) && (
                                 <>
                                     {/* Analyse de Tacite Reconduction */}
                                     <Card>
@@ -864,7 +953,8 @@ export default function Show({ contract: initialContractResponse }: ShowProps) {
                             {/* Actions IA */}
                             {isLoading ? (
                                 <AiActionsSkeleton />
-                            ) : (currentContract as any)?.analysis ? (
+                            ) : (currentContract as any)?.analysis && 
+                               !((contractWithLiveStatus.ocr_status === 'failed' && contractWithLiveStatus.ai_status === 'failed') || wasInTotalFailure) ? (
                                 <Card>
                                     <CardHeader>
                                         <CardTitle className="text-lg">Analyse IA</CardTitle>
@@ -974,7 +1064,7 @@ export default function Show({ contract: initialContractResponse }: ShowProps) {
                             {/* Résumé des informations */}
                             {isLoading ? (
                                 <ContractInfoSkeleton />
-                            ) : (
+                            ) : !((contractWithLiveStatus.ocr_status === 'failed' && contractWithLiveStatus.ai_status === 'failed') || wasInTotalFailure) ? (
                                 <Card className="border-gray-200">
                                     <CardHeader className="pb-4">
                                         <CardTitle className="text-lg font-semibold">Informations clés</CardTitle>
@@ -1012,7 +1102,7 @@ export default function Show({ contract: initialContractResponse }: ShowProps) {
                                         </div>
                                     </CardContent>
                                 </Card>
-                            )}
+                            ) : null}
 
                             {/* Alertes */}
                             {isLoading ? (

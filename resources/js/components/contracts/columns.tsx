@@ -112,7 +112,16 @@ export const columns = (options: ColumnsOptions = {}): ColumnDef<Contract>[] => 
                 <div className="flex items-center">
                     <FileText className="h-4 w-4 text-gray-400 mr-3" />
                     <div>
-                        <div className="font-medium">{contract.title}</div>
+                        {contract.id ? (
+                            <Link 
+                                href={route('contracts.show', { contract: contract.id })}
+                                className="font-medium hover:text-blue-600 transition-colors"
+                            >
+                                {contract.title}
+                            </Link>
+                        ) : (
+                            <div className="font-medium text-gray-400">{contract.title}</div>
+                        )}
                         <div className="text-sm text-gray-500">{contract.category}</div>
                     </div>
                 </div>
@@ -188,6 +197,13 @@ export const columns = (options: ColumnsOptions = {}): ColumnDef<Contract>[] => 
         cell: ({ row }) => {
             const contract = row.original;
             
+            // Guard clause pour s'assurer que le contrat a un ID valide
+            if (!contract?.id) {
+                return (
+                    <div className="text-gray-400 text-sm">Chargement...</div>
+                );
+            }
+            
             return (
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -200,19 +216,28 @@ export const columns = (options: ColumnsOptions = {}): ColumnDef<Contract>[] => 
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem asChild>
-                            <Link href={route('contracts.show', { contract: contract.id })} className="flex cursor-pointer">
+                            <Link 
+                                href={contract.id ? route('contracts.show', { contract: contract.id }) : '#'} 
+                                className={`flex ${contract.id ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
+                            >
                                 <Eye className="mr-2 h-4 w-4" />
                                 Voir
                             </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild>
-                            <Link href={`/contracts/${contract.id}/edit`} className="flex cursor-pointer">
+                            <Link 
+                                href={contract.id ? `/contracts/${contract.id}/edit` : '#'} 
+                                className={`flex ${contract.id ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
+                            >
                                 <Edit className="mr-2 h-4 w-4" />
                                 Modifier
                             </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild>
-                            <a href={`/api/contracts/${contract.id}/download`} className="flex cursor-pointer">
+                            <a 
+                                href={contract.id ? `/api/contracts/${contract.id}/download` : '#'} 
+                                className={`flex ${contract.id ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
+                            >
                                 <Download className="mr-2 h-4 w-4" />
                                 Télécharger
                             </a>
