@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use App\Services\FileValidationService;
 
 class StoreContractRequest extends FormRequest
 {
@@ -81,6 +82,34 @@ class StoreContractRequest extends FormRequest
             'notice_period_days' => 'période de préavis (en jours)',
             'is_tacit_renewal' => 'reconduction tacite',
         ];
+    }
+
+    /**
+     * Configure the validator instance.
+     */
+    public function withValidator($validator)
+    {
+        $validator->after(function ($validator) {
+            if ($this->hasFile('contract_file')) {
+                $file = $this->file('contract_file');
+                $fileValidationService = app(FileValidationService::class);
+                $validation = $fileValidationService->validateFile($file);
+                
+                if (!$validation['valid']) {
+                    foreach ($validation['errors'] as $error) {
+                        $validator->errors()->add('contract_file', $error);
+                    }
+                }
+                
+                // Add warnings to the request for controller to handle
+                if (!empty($validation['warnings'])) {
+                    $this->merge(['file_warnings' => $validation['warnings']]);
+                }
+                
+                // Store file info for controller
+                $this->merge(['file_validation_info' => $validation['file_info']]);
+            }
+        });
     }
 
     /**

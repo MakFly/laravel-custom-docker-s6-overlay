@@ -8,6 +8,7 @@ use App\Http\Controllers\Web\ContractController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\AlertController;
 use App\Http\Controllers\BillingController;
+use App\Http\Controllers\HealthController;
 use Illuminate\Foundation\Application;
 
 Route::get('/', function () {
@@ -65,6 +66,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
 // Stripe webhook (public route for Stripe to call)
 Route::post('/stripe/webhook', [BillingController::class, 'webhook'])->name('stripe.webhook');
+
+// Health checks (public routes for monitoring)
+Route::get('/health', [HealthController::class, 'check'])->name('health.check');
+Route::get('/ping', [HealthController::class, 'ping'])->name('health.ping');
 
 require __DIR__ . '/settings.php';
 require __DIR__ . '/auth.php';

@@ -13,7 +13,7 @@ Route::get('/user', function (Request $request) {
 })->middleware('auth:sanctum');
 
 // Routes protégées par authentication (web session + sanctum pour API)
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'api.rate.limit:api'])->group(function () {
     
     // Dashboard et statistiques
     Route::prefix('dashboard')->name('api.dashboard.')->group(function () {
@@ -25,7 +25,7 @@ Route::middleware(['auth'])->group(function () {
     // Gestion des contrats
     Route::prefix('contracts')->name('api.contracts.')->group(function () {
         Route::get('/', [ContractController::class, 'index'])->name('index');
-        Route::post('/', [ContractController::class, 'store'])->name('store');
+        Route::post('/', [ContractController::class, 'store'])->middleware('api.rate.limit:file_upload')->name('store');
         Route::get('/stats', [ContractController::class, 'stats'])->name('stats');
         Route::get('/upcoming-renewals', [ContractController::class, 'upcomingRenewals'])->name('upcoming-renewals');
         
@@ -35,8 +35,8 @@ Route::middleware(['auth'])->group(function () {
         
         // Actions spéciales
         Route::post('/{contract}/reprocess', [ContractController::class, 'reprocess'])->name('reprocess');
-        Route::post('/{contract}/reanalyze', [ContractController::class, 'reanalyze'])->name('reanalyze');
-        Route::post('/{contract}/force-reanalyze', [ContractController::class, 'forceReanalyze'])->name('force-reanalyze');
+        Route::post('/{contract}/reanalyze', [ContractController::class, 'reanalyze'])->middleware('api.rate.limit:ai_analysis')->name('reanalyze');
+        Route::post('/{contract}/force-reanalyze', [ContractController::class, 'forceReanalyze'])->middleware('api.rate.limit:ai_analysis')->name('force-reanalyze');
         Route::get('/{contract}/download', [ContractController::class, 'download'])->name('download');
         Route::get('/{contract}/view', [ContractController::class, 'view'])->name('view');
         Route::get('/{contract}/status', [ContractController::class, 'status'])->name('status');

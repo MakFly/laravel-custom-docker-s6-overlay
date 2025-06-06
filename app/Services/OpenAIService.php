@@ -8,43 +8,69 @@ use Illuminate\Support\Facades\Log;
 class OpenAIService
 {
     protected Client $client;
+    protected CircuitBreakerService $circuitBreaker;
 
     public function __construct()
     {
         $this->client = \OpenAI::client(config('openai.api_key'));
+        $this->circuitBreaker = new CircuitBreakerService(
+            'openai',
+            failureThreshold: 5,
+            recoveryTimeout: 300, // 5 minutes
+            successThreshold: 2
+        );
     }
 
     public function analyzeContract(string $contractText): array
     {
         $prompt = $this->buildAnalysisPrompt($contractText);
 
-        try {
-            $response = $this->client->chat()->create([
-                'model' => config('openai.model', 'gpt-4'),
-                'messages' => [
-                    ['role' => 'system', 'content' => $this->getSystemPrompt()],
-                    ['role' => 'user', 'content' => $prompt]
-                ],
-                'temperature' => 0.1,
-                'max_tokens' => config('openai.max_tokens', 2000),
-            ]);
+        return $this->circuitBreaker->execute(
+            function() use ($prompt) {
+                $response = $this->client->chat()->create([
+                    'model' => config('openai.model', 'gpt-4'),
+                    'messages' => [
+                        ['role' => 'system', 'content' => $this->getSystemPrompt()],
+                        ['role' => 'user', 'content' => $prompt]
+                    ],
+                    'temperature' => 0.1,
+                    'max_tokens' => config('openai.max_tokens', 2000),
+                ]);
 
-            $content = $response->choices[0]->message->content;
-            
-            Log::info('OpenAI response received', ['length' => strlen($content)]);
-            
-            try {
-                $analysis = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
-                return $this->validateAndCleanAnalysis($analysis);
-            } catch (\JsonException $e) {
-                Log::warning('Failed to parse OpenAI JSON response', ['error' => $e->getMessage()]);
-                return $this->parseUnstructuredResponse($content);
+                $content = $response->choices[0]->message->content;
+                
+                Log::info('OpenAI response received', ['length' => strlen($content)]);
+                
+                try {
+                    $analysis = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
+                    return $this->validateAndCleanAnalysis($analysis);
+                } catch (\JsonException $e) {
+                    Log::warning('Failed to parse OpenAI JSON response', ['error' => $e->getMessage()]);
+                    return $this->parseUnstructuredResponse($content);
+                }
+            },
+            function(\Exception $e) {
+                Log::warning('OpenAI circuit breaker fallback triggered', [
+                    'error' => $e->getMessage(),
+                    'circuit_breaker_metrics' => $this->circuitBreaker->getMetrics()
+                ]);
+
+                // Fallback to pattern matching service
+                $patternService = app(ContractPatternService::class);
+                $result = $patternService->analyzeContract($contractText);
+                
+                return [
+                    'analysis_method' => 'pattern_fallback',
+                    'is_tacit_renewal' => $result['is_tacit_renewal'] ?? false,
+                    'end_date' => $result['end_date'] ?? null,
+                    'notice_period_days' => $result['notice_period_days'] ?? null,
+                    'next_renewal_date' => $result['next_renewal_date'] ?? null,
+                    'confidence' => $result['confidence_score'] ?? 0.5,
+                    'fallback_reason' => 'OpenAI service unavailable - using pattern matching',
+                    'warnings' => ['Service IA temporairement indisponible, analyse basique utilisée']
+                ];
             }
-
-        } catch (\Exception $e) {
-            Log::error('OpenAI API call failed', ['error' => $e->getMessage()]);
-            throw new \Exception("Erreur lors de l'analyse IA: " . $e->getMessage());
-        }
+        );
     }
 
     private function getSystemPrompt(): string

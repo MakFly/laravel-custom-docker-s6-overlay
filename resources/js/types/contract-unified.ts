@@ -157,7 +157,7 @@ export function normalizeToContractUnified(apiData: any): ContractUnified {
     is_expiring: false,
     alerts_count: 0,
     active_alerts_count: 0,
-    status_visual_indicator: 'gray' as 'gray',
+    status_visual_indicator: 'gray' as const,
     permissions: {
         can_view_details: true,
         can_edit: true, // Défaut permissif, à ajuster selon la logique business

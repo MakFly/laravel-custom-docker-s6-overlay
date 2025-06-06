@@ -73,6 +73,51 @@ return [
             'replace_placeholders' => true,
         ],
 
+        // OCR Processing logs
+        'ocr' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/ocr.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => 14,
+            'replace_placeholders' => true,
+        ],
+
+        // AI Analysis logs
+        'ai' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/ai.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => 14,
+            'replace_placeholders' => true,
+        ],
+
+        // User Analytics logs
+        'analytics' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/analytics.log'),
+            'level' => env('LOG_LEVEL', 'info'),
+            'days' => 30,
+            'replace_placeholders' => true,
+        ],
+
+        // Security events
+        'security' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/security.log'),
+            'level' => env('LOG_LEVEL', 'info'),
+            'days' => 90,
+            'replace_placeholders' => true,
+        ],
+
+        // Performance monitoring
+        'performance' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/performance.log'),
+            'level' => env('LOG_LEVEL', 'info'),
+            'days' => 7,
+            'replace_placeholders' => true,
+        ],
+
         'slack' => [
             'driver' => 'slack',
             'url' => env('LOG_SLACK_WEBHOOK_URL'),

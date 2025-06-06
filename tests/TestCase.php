@@ -45,7 +45,9 @@ abstract class TestCase extends BaseTestCase
             'inertia.ssr.enabled' => false,
         ]);
         
-        // Override Inertia root view for testing
-        $this->app['inertia']->setRootView('app-test');
+        // Override Inertia root view for testing if Inertia is available
+        if ($this->app->bound('inertia')) {
+            $this->app['inertia']->setRootView('app-test');
+        }
     }
 }

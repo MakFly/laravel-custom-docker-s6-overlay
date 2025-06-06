@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Traits\BelongsToOrg;
+use App\Models\Traits\Auditable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,7 +13,7 @@ use Carbon\Carbon;
 
 class Contract extends Model
 {
-    use HasFactory, BelongsToOrg;
+    use HasFactory, BelongsToOrg, Auditable;
 
     protected $fillable = [
         'org_id', 'user_id', 'title', 'type', 'category', 'file_path',
