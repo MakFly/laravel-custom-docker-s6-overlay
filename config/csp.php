@@ -18,7 +18,7 @@ return [
      */
     'directives' => [
         // Scripts: permettre self, unsafe-inline et unsafe-eval pour React/Vite
-        [Directive::SCRIPT, [Keyword::SELF, Keyword::UNSAFE_INLINE, Keyword::UNSAFE_EVAL, '127.0.0.1:5173', 'localhost:5173']],
+        [Directive::SCRIPT, [Keyword::SELF, Keyword::UNSAFE_INLINE, Keyword::UNSAFE_EVAL, 'http://127.0.0.1:5173', 'http://localhost:5173', 'https://unpkg.com']],
         
         // Styles: permettre self, unsafe-inline et fonts externes
         [Directive::STYLE, [Keyword::SELF, Keyword::UNSAFE_INLINE, 'fonts.bunny.net', 'fonts.googleapis.com']],
@@ -30,7 +30,7 @@ return [
         [Directive::FONT, [Keyword::SELF, 'data:', 'fonts.bunny.net', 'fonts.gstatic.com']],
         
         // Connexions: permettre self et serveur de dev Vite
-        [Directive::CONNECT, [Keyword::SELF, '127.0.0.1:5173', 'localhost:5173', 'ws://127.0.0.1:5173', 'ws://localhost:5173']],
+        [Directive::CONNECT, [Keyword::SELF, 'http://127.0.0.1:5173', 'http://localhost:5173', 'ws://127.0.0.1:5173', 'ws://localhost:5173']],
         
         // Objects: permettre self pour les PDFs
         [Directive::OBJECT, [Keyword::SELF]],
@@ -69,12 +69,12 @@ return [
     /*
      * Headers will only be added if this setting is set to true.
      */
-    'enabled' => env('CSP_ENABLED', false), // Temporairement désactivé pour debug PDF
+    'enabled' => env('CSP_ENABLED', true),
 
     /**
      * Headers will be added when Vite is hot reloading.
      */
-    'enabled_while_hot_reloading' => env('CSP_ENABLED_WHILE_HOT_RELOADING', false),
+    'enabled_while_hot_reloading' => env('CSP_ENABLED_WHILE_HOT_RELOADING', true),
 
     /*
      * The class responsible for generating the nonces used in inline tags and headers.

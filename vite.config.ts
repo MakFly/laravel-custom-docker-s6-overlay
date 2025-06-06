@@ -15,9 +15,11 @@ export default defineConfig({
         tailwindcss(),
     ],
     server: {
+        host: '127.0.0.1', // Force IPv4 binding to avoid IPv6 CSP issues
         port: 5173,
         hmr: {
             port: 5173,
+            host: '127.0.0.1', // Force IPv4 for HMR as well
         },
     },
     esbuild: {

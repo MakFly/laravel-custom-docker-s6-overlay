@@ -137,7 +137,12 @@ export default function Index({ contracts: initialContracts, stats: initialStats
                 toast.success('Contrat ajouté avec succès ! Traitement OCR en cours...');
                 setIsCreateModalOpen(false);
                 // Rediriger vers la page de détail
-                router.visit(route('contracts.show', { contract: result.data.id }));
+                if (result.data?.id) {
+                    router.visit(route('contracts.show', { contract: result.data.id }));
+                } else {
+                    // Fallback vers la liste des contrats si l'ID n'est pas disponible
+                    router.visit(route('contracts.index'));
+                }
             },
             onError: (error) => {
                 console.error('Erreur lors de l\'upload:', error);

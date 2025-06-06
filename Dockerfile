@@ -44,7 +44,9 @@ RUN install-php-extensions \
 # Installer des paquets supplémentaires en fonction de l'environnement
 RUN apt-get update && \
     apt-get install -y git curl zip unzip cron pkg-config gnupg gosu apt-transport-https libnss3-tools \
-    tesseract-ocr tesseract-ocr-fra tesseract-ocr-eng imagemagick poppler-utils && \
+    tesseract-ocr tesseract-ocr-fra tesseract-ocr-eng imagemagick poppler-utils \
+    acl sudo \
+    && \
     if [ "$ENVIRONMENT" = "dev" ]; then \
     echo "Installation des outils de développement"; \
     fi && \
@@ -149,7 +151,8 @@ RUN if [ -f package.json ]; then \
 RUN mkdir -p /app/storage/framework/{sessions,views,cache} \
     && mkdir -p /app/storage/logs \
     && chown -R www-data:www-data /app/storage /app/bootstrap/cache \
-    && chmod -R 755 /app/storage /app/bootstrap/cache
+    && chmod -R ug+rwx /app/storage /app/bootstrap/cache \
+    && chmod -R o-w /app/storage /app/bootstrap/cache # Others should not write
 
 # Configurer l'environnement Laravel
 RUN if [ "$ENVIRONMENT" = "prod" ]; then \

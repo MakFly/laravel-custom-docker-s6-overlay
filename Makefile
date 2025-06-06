@@ -43,8 +43,8 @@ install: ## Installer le projet (première utilisation)
 	$(DOCKER_COMPOSE) exec app php artisan key:generate
 	$(DOCKER_COMPOSE) exec app php artisan migrate:fresh --seed
 	$(DOCKER_COMPOSE) exec app php artisan storage:link
-	$(DOCKER_COMPOSE) exec app npm install
-	$(DOCKER_COMPOSE) exec app npm run build
+	$(DOCKER_COMPOSE) exec app pnpm install
+	$(DOCKER_COMPOSE) exec app pnpm run build
 	@echo "$(GREEN)Installation terminée! L'application est disponible sur http://localhost:8000$(RESET)"
 
 setup: ## Configurer l'environnement de développement après l'installation
@@ -55,15 +55,15 @@ setup: ## Configurer l'environnement de développement après l'installation
 update-deps: ## Mettre à jour les dépendances (composer et npm)
 	@echo "$(GREEN)Mise à jour des dépendances...$(RESET)"
 	$(DOCKER_COMPOSE) exec app composer update
-	$(DOCKER_COMPOSE) exec app npm update
-	$(DOCKER_COMPOSE) exec app npm run build
+	$(DOCKER_COMPOSE) exec app pnpm update
+	$(DOCKER_COMPOSE) exec app pnpm run build
 	@echo "$(GREEN)Dépendances mises à jour!$(RESET)"
 
 npm-install: ## Installer les dépendances npm
-	$(DOCKER_COMPOSE) exec app npm install
+	$(DOCKER_COMPOSE) exec app pnpm install
 
 npm-dev: ## Compiler les assets en mode développement (avec surveillance)
-	$(DOCKER_COMPOSE) exec app npm run dev
+	$(DOCKER_COMPOSE) exec app pnpm run dev
 
 # ----------------------------------------------------------------------------
 # Commandes Docker
@@ -161,8 +161,8 @@ shell: ## Ouvrir un shell dans le conteneur d'application
 	$(DOCKER_COMPOSE) exec app bash
 
 fix-permissions: ## Corriger les permissions des fichiers
-	@echo "$(GREEN)Correction des permissions...$(RESET)"
-	./fix-permissions.sh
+	@echo "$(GREEN)Correction des permissions (dans le conteneur)...$(RESET)"
+	$(DOCKER_COMPOSE) exec app sh -c "cd /app && ./scripts/fix-permissions.sh"
 
 # ----------------------------------------------------------------------------
 # Commandes spécifiques aux services

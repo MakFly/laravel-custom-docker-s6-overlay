@@ -139,7 +139,7 @@ class ContractController extends Controller
     /**
      * Page d'édition d'un contrat
      */
-    public function edit(Contract $contract)
+    public function edit(Request $request, Contract $contract)
     {
         $this->authorize('update', $contract);
 

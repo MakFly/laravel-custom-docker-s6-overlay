@@ -4,7 +4,6 @@ import { useQueryClient } from '@tanstack/react-query';
 
 interface UseContractActionsProps {
   contractId: number;
-  onSuccess?: () => void;
   onStartPolling?: () => void;
 }
 
@@ -13,7 +12,7 @@ interface ActionProgress {
   ai: boolean;
 }
 
-export function useContractActions({ contractId, onSuccess, onStartPolling }: UseContractActionsProps) {
+export function useContractActions({ contractId, onStartPolling }: UseContractActionsProps) {
   const [isProcessing, setIsProcessing] = useState<ActionProgress>({
     ocr: false,
     ai: false
@@ -56,12 +55,6 @@ export function useContractActions({ contractId, onSuccess, onStartPolling }: Us
         setIsProcessing(prev => ({ ...prev, ocr: false }));
       }, 2000);
       
-      setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ['contracts', contractId] });
-        queryClient.invalidateQueries({ queryKey: ['contracts'] });
-        onSuccess?.();
-      }, 1000);
-      
     } catch (error) {
       console.error('Erreur lors du retraitement OCR:', error);
       toast.error('Erreur lors du retraitement OCR', { id: toastId });
@@ -103,12 +96,6 @@ export function useContractActions({ contractId, onSuccess, onStartPolling }: Us
       setTimeout(() => {
         setIsProcessing(prev => ({ ...prev, ai: false }));
       }, 2000);
-      
-      setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ['contracts', contractId] });
-        queryClient.invalidateQueries({ queryKey: ['contracts'] });
-        onSuccess?.();
-      }, 1000);
       
     } catch (error) {
       console.error('Erreur lors du retraitement IA:', error);
